@@ -1,665 +1,890 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Phân tích Điều chỉnh & Dịch chuyển Phụ tải — EVNSPC 2026</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.16.3/dist/ort.min.js"></script>
-    <style>
-        :root {
-            --blue:#004a99;--blue-lt:#e8f0fb;--blue-mid:#0056b3;
-            --green:#1a7a4a;--green-lt:#d4f0e3;
-            --amber:#b45309;--amber-lt:#fef3c7;
-            --red:#c0392b;--red-lt:#fde8e8;
-            --gray:#495057;--gray-lt:#f1f3f5;
-            --teal:#0e7490;--teal-lt:#e0f7fa;
-            --purple:#6d28d9;--purple-lt:#ede9fe;
-            --border:#dee2e6;--radius:8px;--shadow:0 2px 8px rgba(0,0,0,0.07);
-        }
-        *{box-sizing:border-box;}
-        body{font-family:'Segoe UI',system-ui,sans-serif;margin:0;padding:16px;background:#f0f2f5;color:#212529;font-size:14px;}
-        .container{max-width:1400px;margin:auto;}
-        .header{background:var(--blue);color:white;border-radius:10px;padding:18px 24px;margin-bottom:16px;}
-        .header h1{margin:0;font-size:18px;font-weight:700;}
-        .header .sub{font-size:12px;opacity:0.8;margin-top:3px;}
-        .setup-section{display:grid;grid-template-columns:1fr 1.6fr;gap:14px;margin-bottom:16px;}
-        .upload-box{border:2px dashed #aac4e8;padding:24px 20px;text-align:center;border-radius:10px;background:#f8fbff;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:0.2s;min-height:140px;}
-        .upload-box:hover{background:#edf4ff;border-color:var(--blue);}
-        .config-box{background:white;padding:18px;border-radius:10px;border:1px solid var(--border);box-shadow:var(--shadow);}
-        .config-box h3{margin:0 0 12px;color:var(--blue);font-size:15px;}
-        .param-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;background:#f8fbff;padding:12px;border-radius:6px;border:1px dashed #aac4e8;}
-        .param-item{display:flex;flex-direction:column;gap:4px;}
-        .param-item label{font-size:12px;font-weight:600;color:var(--blue);}
-        .param-item input,.param-item select{padding:7px;border:1px solid var(--border);border-radius:4px;font-size:13px;}
-        .btn-execute{width:100%;padding:13px;background:var(--blue);color:white;border:none;border-radius:6px;font-size:15px;font-weight:700;cursor:pointer;margin-top:10px;transition:0.2s;}
-        .btn-execute:hover:not(:disabled){background:var(--blue-mid);}
-        .btn-execute:disabled{background:#adb5bd;cursor:not-allowed;}
-        .kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:16px 0;}
-        .kpi{padding:14px 16px;border-radius:var(--radius);color:white;font-weight:700;text-align:center;}
-        .kpi .kv{font-size:26px;display:block;margin:4px 0;}
-        .kpi .ks{font-size:11px;opacity:0.9;}
-        .kpi-total{background:linear-gradient(135deg,#495057,#343a40);}
-        .kpi-ok{background:linear-gradient(135deg,#1a7a4a,#20c997);}
-        .kpi-flat{background:linear-gradient(135deg,#d97706,#f59e0b);}
-        .kpi-low{background:linear-gradient(135deg,#c0392b,#e74c3c);}
-        .kpi-solar{background:linear-gradient(135deg,#b45309,#f59e0b);}
-        .kpi-dr{background:linear-gradient(135deg,#6d28d9,#8b5cf6);}
-        .kpi-pa{background:linear-gradient(135deg,#0e7490,#06b6d4);}
-        .section-title{color:var(--blue);font-size:14px;font-weight:700;border-bottom:2px solid #e9ecef;padding-bottom:8px;margin:22px 0 12px;text-transform:uppercase;letter-spacing:0.5px;}
-        .charts-row{display:grid;grid-template-columns:1fr 2fr;gap:14px;margin-bottom:14px;}
-        .charts-row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:14px;}
-        .load-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;}
-        .chart-box{background:white;padding:16px;border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow);}
-        .chart-box canvas{max-height:250px;}
-        .chart-label{font-weight:700;font-size:13px;color:var(--blue);margin-bottom:8px;}
-        .ctrl{margin-bottom:10px;}
-        .ctrl select{width:100%;padding:8px;border-radius:5px;border:1px solid var(--border);font-size:13px;}
-        .badge-row{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;}
-        .badge{display:inline-flex;align-items:center;gap:4px;padding:4px 9px;border-radius:20px;font-size:12px;font-weight:600;border:1px solid;}
-        .b-est{background:var(--blue-lt);border-color:#aac4e8;color:var(--blue);}
-        .b-db{background:var(--amber-lt);border-color:#fcd34d;color:var(--amber);}
-        .b-nlp{background:var(--green-lt);border-color:#6ee7b7;color:var(--green);}
-        .b-onnx{background:var(--gray-lt);border-color:#adb5bd;color:var(--gray);}
-        .b-rules{background:var(--purple-lt);border-color:#c4b5f4;color:var(--purple);}
-        .b-solar{background:#fffbeb;border-color:#fcd34d;color:#92400e;}
-        .b-score{background:var(--teal-lt);border-color:#67e8f9;color:var(--teal);}
-        .b-pa{background:var(--teal-lt);border-color:#67e8f9;color:var(--teal);font-weight:700;}
-        .b-pb{background:var(--blue-lt);border-color:#93c5fd;color:var(--blue);font-weight:700;}
-        .b-pc{background:var(--amber-lt);border-color:#fcd34d;color:var(--amber);font-weight:700;}
-        .b-pd{background:var(--red-lt);border-color:#fca5a5;color:var(--red);font-weight:700;}
-        .dr-bar{margin-top:7px;background:#e9ecef;border-radius:20px;height:9px;overflow:hidden;}
-        .dr-fill{height:100%;border-radius:20px;background:linear-gradient(90deg,#0e7490,#06b6d4);transition:width 0.4s;}
-        .pf{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center;}
-        .pf select,.pf input{padding:7px 10px;border:1px solid var(--border);border-radius:5px;font-size:13px;}
-        .pf label{font-weight:600;font-size:13px;color:var(--blue);}
-        .tc{max-height:440px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius);}
-        table{width:100%;border-collapse:collapse;font-size:12px;background:white;}
-        thead{position:sticky;top:0;z-index:5;}
-        th{color:white;padding:9px 7px;text-align:center;font-weight:600;}
-        td{border:1px solid #e9ecef;padding:7px;text-align:center;}
-        tr:nth-child(even){background:#f8f9fa;}
-        tr:hover{background:#e8f0fb;}
-        .sbar{display:inline-block;width:48px;height:7px;background:#e9ecef;border-radius:4px;vertical-align:middle;margin-left:4px;overflow:hidden;}
-        .sfill{height:100%;border-radius:4px;background:linear-gradient(90deg,#0e7490,#6d28d9);}
-        .export-bar{text-align:center;margin:10px 0 14px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap;}
-        .btn-exp{padding:12px 26px;background:var(--green);color:white;border:none;border-radius:6px;cursor:pointer;font-size:14px;font-weight:700;transition:0.2s;}
-        .btn-exp:hover{background:#155f3a;}
-        .btn-exp2{padding:12px 26px;background:var(--teal);color:white;border:none;border-radius:6px;cursor:pointer;font-size:14px;font-weight:700;transition:0.2s;}
-        .btn-exp2:hover{background:#0a5c72;}
-        #loadingOverlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(255,255,255,0.92);display:none;flex-direction:column;align-items:center;justify-content:center;z-index:9999;}
-        .spinner{border:7px solid #e9ecef;border-top:7px solid var(--blue);border-radius:50%;width:60px;height:60px;animation:spin 0.9s linear infinite;margin-bottom:16px;}
-        @keyframes spin{to{transform:rotate(360deg);}}
-        #loadingMsg{font-size:18px;color:var(--blue);font-weight:700;}
-        #loadingSub{font-size:13px;color:#666;margin-top:6px;}
-        @media(max-width:900px){.setup-section,.charts-row,.charts-row3,.load-row{grid-template-columns:1fr;}}
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Phân tích Điều chỉnh & Dịch chuyển Phụ tải — EVNSPC 2026</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.16.3/dist/ort.min.js"></script>
+<style>
+:root{
+  --blue:#004a99;--blue-lt:#e8f0fb;--blue-mid:#0056b3;
+  --green:#1a7a4a;--green-lt:#d4f0e3;
+  --amber:#b45309;--amber-lt:#fef3c7;
+  --red:#c0392b;--red-lt:#fde8e8;
+  --gray:#495057;--gray-lt:#f1f3f5;
+  --teal:#0e7490;--teal-lt:#e0f7fa;
+  --purple:#6d28d9;--purple-lt:#ede9fe;
+  --border:#dee2e6;--radius:8px;--shadow:0 2px 8px rgba(0,0,0,0.07);
+}
+*{box-sizing:border-box;}
+body{font-family:'Segoe UI',system-ui,sans-serif;margin:0;padding:0;background:#f0f2f5;color:#212529;font-size:14px;}
+
+/* ── Header ── */
+.header{background:var(--blue);color:white;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;gap:16px;}
+.header h1{margin:0;font-size:16px;font-weight:700;flex:1;}
+.header .sub{font-size:11px;opacity:0.75;margin-top:2px;}
+
+/* ── Setup bar (collapsible) ── */
+.setup-bar{background:white;border-bottom:1px solid var(--border);padding:14px 24px;display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap;}
+.upload-box{border:2px dashed #aac4e8;padding:14px 20px;text-align:center;border-radius:8px;background:#f8fbff;cursor:pointer;min-width:260px;transition:0.2s;}
+.upload-box:hover{background:#edf4ff;border-color:var(--blue);}
+.upload-box p{margin:0;font-size:13px;}
+.config-inline{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;flex:1;}
+.pi{display:flex;flex-direction:column;gap:3px;min-width:120px;}
+.pi label{font-size:11px;font-weight:600;color:var(--blue);}
+.pi input,.pi select{padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-size:13px;}
+.time-pair{display:flex;gap:4px;}
+.time-pair select{width:80px;}
+.btn-go{padding:8px 22px;background:var(--blue);color:white;border:none;border-radius:6px;font-size:14px;font-weight:700;cursor:pointer;white-space:nowrap;align-self:flex-end;}
+.btn-go:hover:not(:disabled){background:var(--blue-mid);}
+.btn-go:disabled{background:#adb5bd;cursor:not-allowed;}
+
+/* ── Tabs ── */
+.tab-bar{display:flex;background:white;border-bottom:2px solid var(--border);padding:0 24px;}
+.tab-btn{padding:12px 22px;border:none;background:none;cursor:pointer;font-size:14px;font-weight:600;color:#666;border-bottom:3px solid transparent;margin-bottom:-2px;transition:0.15s;}
+.tab-btn.active{color:var(--blue);border-bottom-color:var(--blue);}
+.tab-btn:hover:not(.active){color:var(--blue);background:#f0f4ff;}
+.tab-panel{display:none;padding:20px 24px;}
+.tab-panel.active{display:block;}
+
+/* ── KPIs ── */
+.kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:16px;}
+.kpi{padding:12px 14px;border-radius:var(--radius);color:white;font-weight:700;text-align:center;}
+.kpi .kv{font-size:24px;display:block;margin:3px 0;}
+.kpi .ks{font-size:10px;opacity:0.88;}
+.kpi-total{background:linear-gradient(135deg,#495057,#343a40);}
+.kpi-ok{background:linear-gradient(135deg,#1a7a4a,#20c997);}
+.kpi-flat{background:linear-gradient(135deg,#d97706,#f59e0b);}
+.kpi-low{background:linear-gradient(135deg,#c0392b,#e74c3c);}
+.kpi-solar{background:linear-gradient(135deg,#b45309,#f59e0b);}
+.kpi-dr{background:linear-gradient(135deg,#6d28d9,#8b5cf6);}
+.kpi-pa{background:linear-gradient(135deg,#0e7490,#06b6d4);}
+
+/* ── Section titles ── */
+.sec{color:var(--blue);font-size:13px;font-weight:700;border-bottom:2px solid #e9ecef;padding-bottom:6px;margin:18px 0 10px;text-transform:uppercase;letter-spacing:0.4px;}
+
+/* ── Chart layouts ── */
+.row2{display:grid;grid-template-columns:1fr 2fr;gap:14px;margin-bottom:14px;}
+.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:14px;}
+.row2e{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;}
+.cbox{background:white;padding:14px;border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow);}
+.cbox canvas{max-height:240px;}
+.clabel{font-weight:700;font-size:12px;color:var(--blue);margin-bottom:6px;}
+
+/* ── Selects row (Tab Chi tiết) ── */
+.sel-cascade{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px;padding:10px 12px;background:#f8fbff;border:1px dashed #aac4e8;border-radius:6px;}
+.sel-cascade label{font-size:12px;font-weight:600;color:var(--blue);white-space:nowrap;}
+.sel-cascade select{padding:6px 10px;border:1px solid var(--border);border-radius:5px;font-size:13px;min-width:160px;}
+
+/* ── Badges ── */
+.badge-row{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;}
+.badge{display:inline-flex;align-items:center;gap:4px;padding:4px 9px;border-radius:20px;font-size:12px;font-weight:600;border:1px solid;}
+.b-est{background:var(--blue-lt);border-color:#aac4e8;color:var(--blue);}
+.b-db{background:var(--amber-lt);border-color:#fcd34d;color:var(--amber);}
+.b-nlp{background:var(--green-lt);border-color:#6ee7b7;color:var(--green);}
+.b-onnx{background:var(--gray-lt);border-color:#adb5bd;color:var(--gray);}
+.b-rules{background:var(--purple-lt);border-color:#c4b5f4;color:var(--purple);}
+.b-solar{background:#fffbeb;border-color:#fcd34d;color:#92400e;}
+.b-score{background:var(--teal-lt);border-color:#67e8f9;color:var(--teal);}
+.b-pa{background:var(--teal-lt);border-color:#67e8f9;color:var(--teal);font-weight:700;}
+.b-pb{background:var(--blue-lt);border-color:#93c5fd;color:var(--blue);font-weight:700;}
+.b-pc{background:var(--amber-lt);border-color:#fcd34d;color:var(--amber);font-weight:700;}
+.b-pd{background:var(--red-lt);border-color:#fca5a5;color:var(--red);font-weight:700;}
+.dr-bar{margin-top:6px;background:#e9ecef;border-radius:20px;height:8px;overflow:hidden;}
+.dr-fill{height:100%;border-radius:20px;background:linear-gradient(90deg,#0e7490,#06b6d4);transition:width 0.4s;}
+
+/* ── Tables ── */
+.pf{display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;align-items:center;}
+.pf select,.pf input{padding:6px 10px;border:1px solid var(--border);border-radius:5px;font-size:13px;}
+.pf label{font-weight:600;font-size:13px;color:var(--blue);}
+.tc{max-height:420px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius);}
+table{width:100%;border-collapse:collapse;font-size:12px;background:white;}
+thead{position:sticky;top:0;z-index:5;}
+th{color:white;padding:8px 6px;text-align:center;font-weight:600;}
+td{border:1px solid #e9ecef;padding:6px;text-align:center;}
+tr:nth-child(even){background:#f8f9fa;}
+tr:hover{background:#e8f0fb;}
+.sbar{display:inline-block;width:44px;height:7px;background:#e9ecef;border-radius:4px;vertical-align:middle;margin-left:3px;overflow:hidden;}
+.sfill{height:100%;border-radius:4px;background:linear-gradient(90deg,#0e7490,#6d28d9);}
+
+/* ── Export ── */
+.exp-row{display:flex;gap:10px;margin:10px 0 14px;flex-wrap:wrap;}
+.btn-exp{padding:9px 22px;background:var(--green);color:white;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:700;}
+.btn-exp:hover{background:#155f3a;}
+.btn-exp2{padding:9px 22px;background:var(--teal);color:white;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:700;}
+.btn-exp2:hover{background:#0a5c72;}
+
+/* ── Loading overlay ── */
+#loadingOverlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(255,255,255,0.92);display:none;flex-direction:column;align-items:center;justify-content:center;z-index:9999;}
+.spinner{border:7px solid #e9ecef;border-top:7px solid var(--blue);border-radius:50%;width:56px;height:56px;animation:spin 0.9s linear infinite;margin-bottom:14px;}
+@keyframes spin{to{transform:rotate(360deg);}}
+#loadingMsg{font-size:17px;color:var(--blue);font-weight:700;}
+#loadingSub{font-size:12px;color:#666;margin-top:5px;}
+
+@media(max-width:900px){.row2,.row3,.row2e{grid-template-columns:1fr;}.config-inline{flex-direction:column;}}
+</style>
 </head>
 <body>
+
 <div id="loadingOverlay">
-    <div class="spinner"></div>
-    <div id="loadingMsg">Đang xử lý...</div>
-    <div id="loadingSub">Vui lòng đợi</div>
+  <div class="spinner"></div>
+  <div id="loadingMsg">Đang xử lý...</div>
+  <div id="loadingSub">Vui lòng đợi</div>
 </div>
-<div class="container">
-    <div class="header">
-        <h1>🔌 Hệ thống Phân tích Điều chỉnh & Nhận dạng Tín hiệu Dịch chuyển Phụ tải — EVNSPC 2026</h1>
-        <div class="sub">Phân loại Khách hàng · Tín hiệu Kỹ thuật Dịch chuyển · Danh sách Khảo sát · Xuất Báo cáo</div>
+
+<!-- ── HEADER ── -->
+<div class="header">
+  <div>
+    <h1>🔌 Phân tích Điều chỉnh & Nhận dạng Tín hiệu Dịch chuyển Phụ tải — EVNSPC 2026</h1>
+    <div class="sub">Phân loại Khách hàng · Tín hiệu Kỹ thuật Dịch chuyển · Danh sách Khảo sát · Xuất Báo cáo</div>
+  </div>
+</div>
+
+<!-- ── SETUP BAR ── -->
+<div class="setup-bar">
+  <div class="upload-box" onclick="document.getElementById('fileInput').click()">
+    <p style="font-size:15px;color:var(--blue);font-weight:700;margin-bottom:4px;">📁 Tải lên File Dữ liệu</p>
+    <p style="color:#888;font-size:12px;margin-bottom:6px;">File 24h + File Danh mục ngành nghề (.xlsx/.csv)</p>
+    <p id="fileNameDisplay" style="font-weight:700;color:#1a7a4a;font-size:12px;"></p>
+    <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" multiple style="display:none">
+  </div>
+  <div class="config-inline">
+    <div class="pi">
+      <label>Khung giờ khảo sát</label>
+      <div class="time-pair">
+        <select id="timeStart"></select>
+        <select id="timeEnd"></select>
+      </div>
     </div>
-    <div class="setup-section">
-        <div class="upload-box" onclick="document.getElementById('fileInput').click()">
-            <p style="font-size:17px;color:var(--blue);margin:0 0 6px;font-weight:700;">📁 Tải lên File Dữ liệu</p>
-            <p style="color:#666;margin:0 0 8px;font-size:13px;">File 24h (.xlsx/.csv) + File Danh mục ngành nghề<br>Có thể chọn nhiều file cùng lúc</p>
-            <p id="fileNameDisplay" style="font-weight:700;color:#1a7a4a;margin:0;font-size:13px;"></p>
-            <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" multiple style="display:none">
-        </div>
-        <div class="config-box">
-            <h3>⚙️ Cấu hình Tham số Phân tích</h3>
-            <div class="param-grid">
-                <div class="param-item">
-                    <label>Khung giờ cần khảo sát (Từ → Đến):</label>
-                    <div style="display:flex;gap:5px;">
-                        <select id="timeStart" style="flex:1;"></select>
-                        <select id="timeEnd" style="flex:1;"></select>
-                    </div>
-                </div>
-                <div class="param-item"><label>Ngày HĐ tương đương/năm:</label><input type="number" id="activeDays" value="296" min="1" max="365"></div>
-                <div class="param-item"><label>Ngưỡng CV Phẳng (%):</label><input type="number" id="cvThreshold" value="15" min="1" max="100"></div>
-                <div class="param-item"><label>Ngưỡng SD Thấp tại đỉnh (%):</label><input type="number" id="lowThreshold" value="20" min="1" max="100"></div>
-            </div>
-            <button class="btn-execute" id="btnExecute" onclick="triggerAnalysis()" disabled>🚀 PHÂN TÍCH & NHẬN DẠNG TÍN HIỆU DịCH CHUYểN</button>
-        </div>
+    <div class="pi"><label>Ngày HĐ/năm</label><input type="number" id="activeDays" value="296" min="1" max="365"></div>
+    <div class="pi"><label>Ngưỡng CV Phẳng (%)</label><input type="number" id="cvThreshold" value="15" min="1" max="100"></div>
+    <div class="pi"><label>Ngưỡng Thấp tại đỉnh (%)</label><input type="number" id="lowThreshold" value="20" min="1" max="100"></div>
+    <button class="btn-go" id="btnExecute" onclick="triggerAnalysis()" disabled>🚀 Phân tích</button>
+  </div>
+</div>
+
+<!-- ── TAB BAR ── -->
+<div class="tab-bar" id="tabBar" style="display:none">
+  <button class="tab-btn active" onclick="switchTab('overview',this)">📊 Tổng quan</button>
+  <button class="tab-btn" onclick="switchTab('detail',this)">🔍 Chi tiết Khách hàng</button>
+</div>
+
+<!-- ════════════════════════════════════════════
+     TAB 1: TỔNG QUAN
+════════════════════════════════════════════ -->
+<div id="tab-overview" class="tab-panel active" style="display:none">
+
+  <!-- KPIs -->
+  <div class="kpi-row">
+    <div class="kpi kpi-total">TỔNG KH<span class="kv" id="s-total">0</span></div>
+    <div class="kpi kpi-ok">1. TÍN HIỆU RÕ<span class="kv" id="s-ok">0</span></div>
+    <div class="kpi kpi-flat">2.1. PHỤ TẢI ĐỀU<span class="kv" id="s-flat">0</span></div>
+    <div class="kpi kpi-low">2.2. TẢI THẤP<span class="kv" id="s-low">0</span></div>
+    <div class="kpi kpi-solar">ĐMTMN<span class="kv" id="s-solar">0</span></div>
+    <div class="kpi kpi-dr">BIÊN ĐỘ ĐỈNH-NỀN<span class="kv" id="s-dr-mw">0 MW</span><span class="ks">Toàn hệ thống</span></div>
+    <div class="kpi kpi-pa">NHÓM A<span class="kv" id="s-pa">0</span><span class="ks">Đáng khảo sát</span></div>
+  </div>
+
+  <div class="exp-row" id="exportBar" style="display:none">
+    <button class="btn-exp" onclick="exportExcel()">⬇ Xuất Excel Toàn bộ</button>
+    <button class="btn-exp2" onclick="exportPriorityExcel()">⬇ Xuất Danh sách Khảo sát A+B</button>
+  </div>
+
+  <!-- Phần I: Cơ cấu KH -->
+  <div class="sec">I. Cơ cấu Khách hàng — Toàn Tổng Công ty</div>
+  <div class="row2">
+    <div class="cbox"><canvas id="pieChart"></canvas></div>
+    <div class="cbox"><canvas id="barChart"></canvas></div>
+  </div>
+
+  <!-- Phần II: Đường cong phụ tải cấp SPC/CTĐL -->
+  <div class="sec">II. Đường cong Phụ tải Tổng hợp 24 giờ</div>
+  <div class="row2e">
+    <div class="cbox">
+      <div class="clabel">Toàn Tổng Công ty EVNSPC</div>
+      <canvas id="spcChart"></canvas>
     </div>
-
-    <div id="results" style="display:none">
-        <div class="kpi-grid">
-            <div class="kpi kpi-total">TỔNG KH<span class="kv" id="s-total">0</span></div>
-            <div class="kpi kpi-ok">1. ĐÁP ỨNG<span class="kv" id="s-ok">0</span></div>
-            <div class="kpi kpi-flat">2.1. PHẲNG<span class="kv" id="s-flat">0</span></div>
-            <div class="kpi kpi-low">2.2. THẤP<span class="kv" id="s-low">0</span></div>
-            <div class="kpi kpi-solar">ĐMTMN<span class="kv" id="s-solar">0</span></div>
-            <div class="kpi kpi-dr">BIÊN ĐỘ ĐỈnh-NềN<span class="kv" id="s-dr-mw">0 MW</span><span class="ks">Tổng biên độ đỉnh-nền toàn bộ KH</span></div>
-            <div class="kpi kpi-pa">NHÓM A<span class="kv" id="s-pa">0</span><span class="ks">KH đáng khảo sát trực tiếp</span></div>
-        </div>
-
-        <div class="export-bar" id="exportBar" style="display:none">
-            <button class="btn-exp" onclick="exportExcel()">⬇ Xuất Excel Toàn bộ</button>
-            <button class="btn-exp2" onclick="exportPriorityExcel()">⬇ Xuất Danh sách Khảo sát Nhóm A+B</button>
-        </div>
-
-        <div class="section-title">I. Tổng quan Cơ cấu Khách hàng</div>
-        <div class="charts-row">
-            <div class="chart-box"><canvas id="pieChart"></canvas></div>
-            <div class="chart-box"><canvas id="barChart"></canvas></div>
-        </div>
-
-        <div class="section-title">II. Phân tích Tín hiệu Kỹ thuật Dịch chuyển Phụ tải</div>
-        <div class="charts-row3">
-            <div class="chart-box"><div class="chart-label">Biên độ đỉnh-nền (MW) theo Công ty ĐL</div><canvas id="drChart"></canvas></div>
-            <div class="chart-box"><div class="chart-label">Phân bổ Nhóm Tín hiệu Kỹ thuật</div><canvas id="prioChart"></canvas></div>
-            <div class="chart-box"><div class="chart-label">Ngành nghề — Biên độ đỉnh-nền cao nhất</div><canvas id="indChart"></canvas></div>
-        </div>
-
-        <div class="section-title">III. Phân tích Đường cong Phụ tải 24 giờ</div>
-        <div class="load-row">
-            <div class="chart-box">
-                <div class="ctrl">
-                    <label style="font-weight:700;font-size:13px;">Chọn Khách hàng:</label>
-                    <select id="customerSelect" onchange="drawCustomerChart()"></select>
-                    <div class="badge-row" id="custBadges"></div>
-                    <div class="dr-bar" id="drBar" style="display:none"><div class="dr-fill" id="drFill"></div></div>
-                </div>
-                <canvas id="custChart"></canvas>
-            </div>
-            <div class="chart-box">
-                <div class="ctrl">
-                    <label style="font-weight:700;font-size:13px;">Chọn Công ty Điện lực:</label>
-                    <select id="companySelect" onchange="drawGroupChart()"></select>
-                </div>
-                <canvas id="groupChart"></canvas>
-            </div>
-        </div>
-
-        <div class="section-title">IV. Danh sách Khảo sát — Nhóm có Tín hiệu Kỹ thuật Đáng chú ý</div>
-        <div class="pf">
-            <label>Lọc:</label>
-            <select id="filterP" onchange="renderPrioTable()">
-                <option value="ALL">Tất cả nhóm</option>
-                <option value="A">A — Đáng khảo sát trực tiếp</option>
-                <option value="B">B — Tìm hiểu thêm</option>
-                <option value="C">C — Theo dõi</option>
-                <option value="D">D — Tín hiệu yếu</option>
-            </select>
-            <select id="filterC2" onchange="renderPrioTable()"><option value="ALL">Tất cả Công ty ĐL</option></select>
-            <input type="text" id="searchKH" placeholder="🔍 Tìm tên KH..." oninput="renderPrioTable()" style="min-width:200px;">
-            <span id="prioCount" style="font-size:12px;color:#666;"></span>
-        </div>
-        <div class="tc">
-            <table>
-                <thead>
-                    <tr>
-                        <th style="background:var(--blue);">#</th>
-                        <th style="background:var(--blue);text-align:left;min-width:200px;">Tên Khách hàng</th>
-                        <th style="background:var(--blue);">Công ty ĐL</th>
-                        <th style="background:var(--blue);">Nhóm phân loại</th>
-                        <th style="background:var(--purple);">Ưu tiên</th>
-                        <th style="background:var(--purple);">Điểm tín hiệu</th>
-                        <th style="background:var(--teal);">Biên độ đỉnh-nền (kW)</th>
-                        <th style="background:var(--teal);">Linh hoạt (%)</th>
-                        <th style="background:var(--green);">SL Năm (MWh)</th>
-                        <th style="background:var(--blue);">Ngành nghề</th>
-                        <th style="background:var(--amber);">ĐMTMN</th>
-                    </tr>
-                </thead>
-                <tbody id="prioTbody"></tbody>
-            </table>
-        </div>
-
-        <div class="section-title">V. Báo cáo Tổng hợp theo Đơn vị & Sản lượng</div>
-        <div class="tc">
-            <table>
-                <thead>
-                    <tr>
-                        <th rowspan="2" style="background:var(--blue);vertical-align:middle;text-align:left;min-width:180px;">Công ty Điện lực</th>
-                        <th colspan="4" style="background:#0056b3;">Phân loại Điều chỉnh phụ tải</th>
-                        <th colspan="4" style="background:var(--teal);">Phân loại Sản lượng (kWh/năm)</th>
-                        <th colspan="3" style="background:var(--purple);">Tín hiệu Dịch chuyển</th>
-                        <th rowspan="2" style="background:var(--amber);vertical-align:middle;">ĐMTMN</th>
-                    </tr>
-                    <tr>
-                        <th style="background:#0056b3;">1.Đáp ứng</th><th style="background:#0056b3;">2.1.Phẳng</th>
-                        <th style="background:#0056b3;">2.2.Thấp</th><th style="background:#0056b3;">Tổng</th>
-                        <th style="background:var(--teal);">≥1 Triệu</th><th style="background:var(--teal);">500k–1Tr</th>
-                        <th style="background:var(--teal);">200k–500k</th><th style="background:var(--teal);">&lt;200k</th>
-                        <th style="background:var(--purple);">KH nhóm A (đáng khảo sát)</th>
-                        <th style="background:var(--purple);">Biên độ đỉnh-nền (MW)</th>
-                        <th style="background:var(--purple);">Flex TB(%)</th>
-                    </tr>
-                </thead>
-                <tbody id="unitTbody"></tbody>
-            </table>
-        </div>
+    <div class="cbox">
+      <div class="clabel">Theo Công ty Điện lực</div>
+      <div style="margin-bottom:8px;">
+        <select id="companySelect" onchange="drawGroupChart()" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:5px;font-size:13px;"></select>
+      </div>
+      <canvas id="groupChart"></canvas>
     </div>
+  </div>
+
+  <!-- Phần III: Tín hiệu dịch chuyển -->
+  <div class="sec">III. Tín hiệu Kỹ thuật Dịch chuyển theo Công ty ĐL & Ngành nghề</div>
+  <div class="row3">
+    <div class="cbox"><div class="clabel">Biên độ đỉnh-nền (MW) theo Công ty ĐL</div><canvas id="drChart"></canvas></div>
+    <div class="cbox"><div class="clabel">Phân bổ Nhóm Tín hiệu Kỹ thuật</div><canvas id="prioChart"></canvas></div>
+    <div class="cbox"><div class="clabel">Ngành nghề — Biên độ đỉnh-nền cao nhất</div><canvas id="indChart"></canvas></div>
+  </div>
+
+  <!-- Phần IV: Bảng tổng hợp -->
+  <div class="sec">IV. Bảng Tổng hợp theo Đơn vị & Sản lượng</div>
+  <div class="tc">
+    <table>
+      <thead>
+        <tr>
+          <th rowspan="2" style="background:var(--blue);vertical-align:middle;text-align:left;min-width:180px;">Công ty Điện lực</th>
+          <th colspan="4" style="background:#0056b3;">Phân loại Điều chỉnh phụ tải</th>
+          <th colspan="4" style="background:var(--teal);">Phân loại Sản lượng (kWh/năm)</th>
+          <th colspan="3" style="background:var(--purple);">Tín hiệu Dịch chuyển</th>
+          <th rowspan="2" style="background:var(--amber);vertical-align:middle;">ĐMTMN</th>
+        </tr>
+        <tr>
+          <th style="background:#0056b3;">1.Tín hiệu rõ</th><th style="background:#0056b3;">2.1.Đều</th>
+          <th style="background:#0056b3;">2.2.Thấp</th><th style="background:#0056b3;">Tổng</th>
+          <th style="background:var(--teal);">≥1 Triệu</th><th style="background:var(--teal);">500k–1Tr</th>
+          <th style="background:var(--teal);">200k–500k</th><th style="background:var(--teal);">&lt;200k</th>
+          <th style="background:var(--purple);">KH nhóm A</th>
+          <th style="background:var(--purple);">Biên độ (MW)</th>
+          <th style="background:var(--purple);">Dao động TB(%)</th>
+        </tr>
+      </thead>
+      <tbody id="unitTbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════
+     TAB 2: CHI TIẾT KHÁCH HÀNG
+════════════════════════════════════════════ -->
+<div id="tab-detail" class="tab-panel">
+
+  <!-- Cascade selects: Nhóm → CTĐL → KH -->
+  <div class="sel-cascade">
+    <label>Nhóm phân loại:</label>
+    <select id="filterGroup" onchange="onGroupChange()">
+      <option value="ALL">Tất cả nhóm</option>
+      <option value="1">1 — Tín hiệu dao động rõ</option>
+      <option value="2.1">2.1 — Phụ tải chạy đều</option>
+      <option value="2.2">2.2 — Tải thấp / bằng phẳng</option>
+    </select>
+    <label>Công ty ĐL:</label>
+    <select id="filterCompanyDetail" onchange="onCompanyDetailChange()">
+      <option value="ALL">Tất cả</option>
+    </select>
+    <label>Khách hàng:</label>
+    <select id="customerSelect" onchange="drawCustomerChart()" style="min-width:280px;flex:1;"></select>
+  </div>
+
+  <!-- Badges & progress bar -->
+  <div class="badge-row" id="custBadges"></div>
+  <div class="dr-bar" id="drBar" style="display:none"><div class="dr-fill" id="drFill"></div></div>
+
+  <!-- Đường cong KH + danh sách -->
+  <div class="row2e" style="margin-top:10px;">
+    <div class="cbox">
+      <canvas id="custChart"></canvas>
+    </div>
+    <div>
+      <!-- Danh sách KH trong nhóm đang lọc -->
+      <div class="sec" style="margin-top:0;">Danh sách Khảo sát — Nhóm có Tín hiệu Đáng chú ý</div>
+      <div class="pf">
+        <label>Nhóm KS:</label>
+        <select id="filterP" onchange="renderPrioTable()">
+          <option value="ALL">Tất cả</option>
+          <option value="A">A — Đáng khảo sát</option>
+          <option value="B">B — Tìm hiểu thêm</option>
+          <option value="C">C — Theo dõi</option>
+          <option value="D">D — Tín hiệu yếu</option>
+        </select>
+        <input type="text" id="searchKH" placeholder="🔍 Tìm tên KH..." oninput="renderPrioTable()" style="min-width:180px;">
+        <span id="prioCount" style="font-size:11px;color:#666;"></span>
+      </div>
+      <div class="tc" style="max-height:320px;">
+        <table>
+          <thead>
+            <tr>
+              <th style="background:var(--blue);">#</th>
+              <th style="background:var(--blue);text-align:left;min-width:160px;">Tên KH</th>
+              <th style="background:var(--blue);">Công ty ĐL</th>
+              <th style="background:var(--blue);">Nhóm</th>
+              <th style="background:var(--purple);">KS</th>
+              <th style="background:var(--purple);">Điểm</th>
+              <th style="background:var(--teal);">Biên độ (kW)</th>
+              <th style="background:var(--green);">SL (MWh)</th>
+              <th style="background:var(--blue);min-width:120px;">Ngành</th>
+              <th style="background:var(--amber);">☀️</th>
+            </tr>
+          </thead>
+          <tbody id="prioTbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
+// ══════════════════════════════════════════════════════
+// GLOBALS & CONSTANTS
+// ══════════════════════════════════════════════════════
 let rawData24h=[],referenceDatabase={},finalData=[];
-let myPie,myBar,myCust,myGrp,myDr,myPrio,myInd;
+let myPie,myBar,myCust,myGrp,mySpc,myDr,myPrio,myInd;
 const TL=Array.from({length:24},(_,i)=>String(i).padStart(2,'0')+':00');
 
+// ══ UI helpers ══
 function showLoading(m,s='Vui lòng đợi...'){
-    document.getElementById('loadingMsg').innerText=m;
-    document.getElementById('loadingSub').innerText=s;
-    document.getElementById('loadingOverlay').style.display='flex';
+  document.getElementById('loadingMsg').innerText=m;
+  document.getElementById('loadingSub').innerText=s;
+  document.getElementById('loadingOverlay').style.display='flex';
 }
 function hideLoading(){document.getElementById('loadingOverlay').style.display='none';}
 
-function rmTones(s){
-    const m=[[/[àáạảãâầấậẩẫăằắặẳẵ]/g,'a'],[/[èéẹẻẽêềếệểễ]/g,'e'],[/[ìíịỉĩ]/g,'i'],
-        [/[òóọỏõôồốộổỗơờớợởỡ]/g,'o'],[/[ùúụủũưừứựửữ]/g,'u'],[/[ỳýỵỷỹ]/g,'y'],[/đ/g,'d'],
-        [/[ÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴ]/g,'A'],[/[ÈÉẸẺẼÊỀẾỆỂỄ]/g,'E'],[/[ÌÍỊỈĨ]/g,'I'],
-        [/[ÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠ]/g,'O'],[/[ÙÚỤỦŨƯỪỨỰỬỮ]/g,'U'],[/[ỲÝỴỶỸ]/g,'Y'],[/Đ/g,'D']];
-    m.forEach(([r,v])=>s=s.replace(r,v));
-    return s.toLowerCase().trim();
+// ══ Tab switching ══
+function switchTab(id,btn){
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('tab-'+id).classList.add('active');
+  btn.classList.add('active');
 }
 
-function nlpPredict(name){
-    if(!name)return null;
-    const n=rmTones(name);
-    const rules=[
-        {kw:['thuy san','hai san','ca tra','ca basa','tom cang','tom su','seafood','nuoc man'],l:'Chế biến thủy sản'},
-        {kw:['nuoc da','sx nuoc da','nuoc giai khat','bia ','nuoc uong','dong lanh'],l:'Sản xuất nước đá'},
-        {kw:['xay xat','lau bong','bong gao','kho lua','say lua','che bien gao','luong thuc'],l:'Xay xát - Lau bóng gạo'},
-        {kw:['khai thac da','xi mang','ximang','vat lieu xay dung','gach ngoi','gach ceramic'],l:'Khai thác đá / Vật liệu XD'},
-        {kw:['che bien go','go xuat khau','do go','san go','vat lieu go'],l:'Chế biến gỗ'},
-        {kw:['cao su','nhua','bao bi','plastic','rubber','composite','pvc'],l:'Sản xuất cao su và nhựa'},
-        {kw:['det ','may mac','may xuat khau','garment','vai ','soi ','nhuom','trang phuc'],l:'May mặc / Dệt nhuộm'},
-        {kw:['giay dep','da giay','tui xach','vali','shoes','leather','balo'],l:'Da giày / Túi xách'},
-        {kw:['co khi','sat thep','thep xay dung','kim loai','nhom ','ton ','ren ','duc '],l:'Cơ khí / Kim loại'},
-        {kw:['chan nuoi','trai ga','trai heo','trai vit','nuoi trong','trong trot','bom tuoi'],l:'Chăn nuôi / Nông nghiệp'},
-        {kw:['hat dieu','ca phe','hat tieu','rau qua','che bien nong san'],l:'Chế biến Nông sản'},
-        {kw:['thuc pham','thit ','sua ','banh ','kem ','mi ','pho '],l:'Chế biến thực phẩm'},
-        {kw:['giay ','carton','bao bi giay','san xuat giay','packaging'],l:'Sản xuất giấy / Bao bì'},
-        {kw:['kho lanh','kho dong lanh','bao quan lanh'],l:'Kho lạnh / Cấp đông'},
-        {kw:['truong ','benh vien','uy ban','hanh chinh'],l:'Hành chính / Dịch vụ'},
-    ];
-    for(const{kw,l}of rules){for(const k of kw){if(n.includes(k))return l;}}
-    return null;
-}
-
+// ══ Init selects ══
 document.addEventListener('DOMContentLoaded',()=>{
-    const s=document.getElementById('timeStart'),e=document.getElementById('timeEnd');
-    const html=TL.map((t,i)=>`<option value="${i}">${t}</option>`).join('');
-    s.innerHTML=e.innerHTML=html; s.value='14'; e.value='16';
+  const s=document.getElementById('timeStart'),e=document.getElementById('timeEnd');
+  const html=TL.map((t,i)=>`<option value="${i}">${t}</option>`).join('');
+  s.innerHTML=e.innerHTML=html; s.value='14'; e.value='16';
 });
 
+// ══════════════════════════════════════════════════════
+// NLP
+// ══════════════════════════════════════════════════════
+function rmTones(s){
+  const m=[[/[àáạảãâầấậẩẫăằắặẳẵ]/g,'a'],[/[èéẹẻẽêềếệểễ]/g,'e'],[/[ìíịỉĩ]/g,'i'],
+    [/[òóọỏõôồốộổỗơờớợởỡ]/g,'o'],[/[ùúụủũưừứựửữ]/g,'u'],[/[ỳýỵỷỹ]/g,'y'],[/đ/g,'d'],
+    [/[ÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴ]/g,'A'],[/[ÈÉẸẺẼÊỀẾỆỂỄ]/g,'E'],[/[ÌÍỊỈĨ]/g,'I'],
+    [/[ÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠ]/g,'O'],[/[ÙÚỤỦŨƯỪỨỰỬỮ]/g,'U'],[/[ỲÝỴỶỸ]/g,'Y'],[/Đ/g,'D']];
+  m.forEach(([r,v])=>s=s.replace(r,v));
+  return s.toLowerCase().trim();
+}
+function nlpPredict(name){
+  if(!name)return null;
+  const n=rmTones(name);
+  const rules=[
+    {kw:['thuy san','hai san','ca tra','ca basa','tom cang','tom su','seafood','nuoc man'],l:'Chế biến thủy sản'},
+    {kw:['nuoc da','sx nuoc da','nuoc giai khat','bia ','nuoc uong','dong lanh'],l:'Sản xuất nước đá'},
+    {kw:['xay xat','lau bong','bong gao','kho lua','say lua','che bien gao','luong thuc'],l:'Xay xát - Lau bóng gạo'},
+    {kw:['khai thac da','xi mang','ximang','vat lieu xay dung','gach ngoi','gach ceramic'],l:'Khai thác đá / Vật liệu XD'},
+    {kw:['che bien go','go xuat khau','do go','san go'],l:'Chế biến gỗ'},
+    {kw:['cao su','nhua','bao bi','plastic','rubber','composite','pvc'],l:'Sản xuất cao su và nhựa'},
+    {kw:['det ','may mac','may xuat khau','garment','vai ','soi ','nhuom','trang phuc'],l:'May mặc / Dệt nhuộm'},
+    {kw:['giay dep','da giay','tui xach','vali','shoes','leather','balo'],l:'Da giày / Túi xách'},
+    {kw:['co khi','sat thep','thep xay dung','kim loai','nhom ','ton ','ren ','duc '],l:'Cơ khí / Kim loại'},
+    {kw:['chan nuoi','trai ga','trai heo','trai vit','nuoi trong','trong trot','bom tuoi'],l:'Chăn nuôi / Nông nghiệp'},
+    {kw:['hat dieu','ca phe','hat tieu','rau qua','che bien nong san'],l:'Chế biến Nông sản'},
+    {kw:['thuc pham','thit ','sua ','banh ','kem ','mi ','pho '],l:'Chế biến thực phẩm'},
+    {kw:['giay ','carton','bao bi giay','san xuat giay','packaging'],l:'Sản xuất giấy / Bao bì'},
+    {kw:['kho lanh','kho dong lanh','bao quan lanh'],l:'Kho lạnh / Cấp đông'},
+    {kw:['truong ','benh vien','uy ban','hanh chinh'],l:'Hành chính / Dịch vụ'},
+  ];
+  for(const{kw,l}of rules){for(const k of kw){if(n.includes(k))return l;}}
+  return null;
+}
+
+// ══════════════════════════════════════════════════════
+// FILE READING
+// ══════════════════════════════════════════════════════
 function readFile(f){return new Promise((res,rej)=>{const r=new FileReader();r.onload=ev=>res(new Uint8Array(ev.target.result));r.onerror=rej;r.readAsArrayBuffer(f);});}
 
 document.getElementById('fileInput').addEventListener('change',async function(e){
-    const files=e.target.files; if(!files||!files.length)return;
-    showLoading('Đang đọc file dữ liệu...','Phân loại và nạp dữ liệu');
-    rawData24h=[]; referenceDatabase={};
-    let names=[];
-    try{
-        for(const file of files){
-            names.push(file.name);
-            const data=await readFile(file);
-            const wb=XLSX.read(data,{type:'array'});
-            const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
-            if(!rows.length)continue;
-            const keys=Object.keys(rows[0]);
-            if(keys.includes('00:00')&&(keys.includes('Mã KH')||keys.includes('Mã khách hàng'))){
-                rawData24h=rows;
-            }else if(keys.includes('Đặc điểm phụ tải')){
-                const ik=keys.find(k=>k.includes('Mã'));
-                if(ik)rows.forEach(r=>{if(r[ik]&&r['Đặc điểm phụ tải'])referenceDatabase[String(r[ik]).trim()]=r['Đặc điểm phụ tải'];});
-            }
-        }
-        document.getElementById('fileNameDisplay').innerHTML=`✅ ${names.join(' + ')} — DB: ${Object.keys(referenceDatabase).length} KH`;
-        document.getElementById('btnExecute').disabled=rawData24h.length===0;
-        if(!rawData24h.length)alert('Chưa tìm thấy file dữ liệu 24h!');
-    }catch(err){alert('Lỗi đọc file: '+err.message);}
-    finally{hideLoading();}
+  const files=e.target.files; if(!files||!files.length)return;
+  showLoading('Đang đọc file dữ liệu...','Phân loại và nạp dữ liệu');
+  rawData24h=[]; referenceDatabase={}; let names=[];
+  try{
+    for(const file of files){
+      names.push(file.name);
+      const data=await readFile(file);
+      const wb=XLSX.read(data,{type:'array'});
+      const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+      if(!rows.length)continue;
+      const keys=Object.keys(rows[0]);
+      if(keys.includes('00:00')&&(keys.includes('Mã KH')||keys.includes('Mã khách hàng'))){
+        rawData24h=rows;
+      }else if(keys.includes('Đặc điểm phụ tải')){
+        const ik=keys.find(k=>k.includes('Mã'));
+        if(ik)rows.forEach(r=>{if(r[ik]&&r['Đặc điểm phụ tải'])referenceDatabase[String(r[ik]).trim()]=r['Đặc điểm phụ tải'];});
+      }
+    }
+    document.getElementById('fileNameDisplay').innerHTML=`✅ ${names.join(' + ')} — DB: ${Object.keys(referenceDatabase).length} KH`;
+    document.getElementById('btnExecute').disabled=rawData24h.length===0;
+    if(!rawData24h.length)alert('Chưa tìm thấy file dữ liệu 24h!');
+  }catch(err){alert('Lỗi đọc file: '+err.message);}
+  finally{hideLoading();}
 });
 
+// ══════════════════════════════════════════════════════
+// ANALYSIS ENGINE (giữ nguyên logic)
+// ══════════════════════════════════════════════════════
 function triggerAnalysis(){
-    document.getElementById('btnExecute').disabled=true;
-    showLoading('🤖 Đang phân tích & nhận dạng tín hiệu dịch chuyển...','Hệ thống AI Đa Lớp: Database → NLP → ONNX → Rules');
-    setTimeout(async()=>{
-        await analyze(rawData24h);
-        document.getElementById('btnExecute').disabled=false;
-        hideLoading();
-        document.getElementById('results').scrollIntoView({behavior:'smooth'});
-    },60);
+  document.getElementById('btnExecute').disabled=true;
+  showLoading('🤖 Đang phân tích & nhận dạng tín hiệu dịch chuyển...','Hệ thống AI Đa Lớp: Database → NLP → ONNX → Rules');
+  setTimeout(async()=>{
+    await analyze(rawData24h);
+    document.getElementById('btnExecute').disabled=false;
+    hideLoading();
+    document.getElementById('tabBar').style.display='flex';
+    document.getElementById('tab-overview').style.display='block';
+  },60);
 }
 
 async function analyze(data){
-    const si=+document.getElementById('timeStart').value;
-    const ei=+document.getElementById('timeEnd').value;
-    const cvT=+document.getElementById('cvThreshold').value/100;
-    const lwT=+document.getElementById('lowThreshold').value/100;
-    const ad=+document.getElementById('activeDays').value;
-    const hk=data.length>0?Object.keys(data[0]).slice(-24):[];
+  const si=+document.getElementById('timeStart').value;
+  const ei=+document.getElementById('timeEnd').value;
+  const cvT=+document.getElementById('cvThreshold').value/100;
+  const lwT=+document.getElementById('lowThreshold').value/100;
+  const ad=+document.getElementById('activeDays').value;
+  const hk=data.length>0?Object.keys(data[0]).slice(-24):[];
 
-    let sess=null;
-    try{
-        ort.env.wasm.wasmPaths='https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/';
-        sess=await ort.InferenceSession.create('model.onnx');
-    }catch(e){console.warn('ONNX:',e.message);}
+  let sess=null;
+  try{
+    ort.env.wasm.wasmPaths='https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/';
+    sess=await ort.InferenceSession.create('model.onnx');
+  }catch(e){console.warn('ONNX:',e.message);}
 
-    const OL=['Sản xuất cao su và nhựa','Chế biến thực phẩm','Sản xuất nước đá','May mặc / Dệt nhuộm',
-        'Xay xát - Lau bóng gạo','Cơ khí / Kim loại','Chế biến thủy sản','Da giày / Túi xách',
-        'Chăn nuôi / Nông nghiệp','Sản xuất giấy / Bao bì','Khai thác đá / Vật liệu XD',
-        'Chế biến gỗ','Kho lạnh / Cấp đông','Sản xuất đồ uống','Chế biến Nông sản','Sản xuất / TM tổng hợp'];
+  const OL=['Sản xuất cao su và nhựa','Chế biến thực phẩm','Sản xuất nước đá','May mặc / Dệt nhuộm',
+    'Xay xát - Lau bóng gạo','Cơ khí / Kim loại','Chế biến thủy sản','Da giày / Túi xách',
+    'Chăn nuôi / Nông nghiệp','Sản xuất giấy / Bao bì','Khai thác đá / Vật liệu XD',
+    'Chế biến gỗ','Kho lạnh / Cấp đông','Sản xuất đồ uống','Chế biến Nông sản','Sản xuất / TM tổng hợp'];
 
-    const out=[];
-    for(const row of data){
-        const gv=(ks)=>{const k=Object.keys(row).find(rk=>ks.some(pk=>rk.toLowerCase().includes(pk)));return k?row[k]:'';}
-        const id=String(gv(['mã kh','mã khách hàng'])||'').trim();
-        const name=gv(['tên kh','khách hàng','tên'])||'KH ẩn danh';
-        const comp=gv(['công ty','điện lực','đơn vị'])||'Đơn vị khác';
-        const loai=gv(['loại phụ tải','loai phu tai'])||'';
+  const out=[];
+  for(const row of data){
+    const gv=(ks)=>{const k=Object.keys(row).find(rk=>ks.some(pk=>rk.toLowerCase().includes(pk)));return k?row[k]:'';}
+    const id=String(gv(['mã kh','mã khách hàng'])||'').trim();
+    const name=gv(['tên kh','khách hàng','tên'])||'KH ẩn danh';
+    const comp=gv(['công ty','điện lực','đơn vị'])||'Đơn vị khác';
+    const loai=gv(['loại phụ tải','loai phu tai'])||'';
+    const vals=hk.map(k=>parseFloat(row[k])||0);
+    const maxV=Math.max(...vals);
+    const avgV=vals.reduce((a,b)=>a+b,0)/vals.length;
+    const std=Math.sqrt(vals.reduce((s,v)=>s+Math.pow(v-avgV,2),0)/(vals.length-1));
+    const cv=avgV>0?std/avgV:0;
+    const peakVals=vals.slice(si,ei+1);
+    const peakAvg=peakVals.reduce((a,b)=>a+b,0)/peakVals.length;
+    const annual=vals.reduce((a,b)=>a+b,0)*ad;
+    const vg=annual>=1e6?'1. ≥ 1 Triệu kWh':annual>=5e5?'2. 500k–<1 Triệu':annual>=2e5?'3. 200k–<500k':'4. < 200k kWh';
+    const mp=Math.max(...vals.slice(6,10)),mm=Math.min(...vals.slice(10,16)),ep=Math.max(...vals.slice(16,20));
+    const nb=(vals.slice(0,5).reduce((a,b)=>a+b,0)+vals[22]+vals[23])/7;
+    const sol=maxV>30&&mp>1.5*mm&&ep>1.5*mm&&mm<0.4*maxV&&nb<0.6*mp;
 
-        const vals=hk.map(k=>parseFloat(row[k])||0);
-        const maxV=Math.max(...vals);
-        const avgV=vals.reduce((a,b)=>a+b,0)/vals.length;
-        const std=Math.sqrt(vals.reduce((s,v)=>s+Math.pow(v-avgV,2),0)/(vals.length-1));
-        const cv=avgV>0?std/avgV:0;
-        const peakVals=vals.slice(si,ei+1);
-        const peakAvg=peakVals.reduce((a,b)=>a+b,0)/peakVals.length;
-        const annual=vals.reduce((a,b)=>a+b,0)*ad;
-        const vg=annual>=1e6?'1. ≥ 1 Triệu kWh':annual>=5e5?'2. 500k–<1 Triệu':annual>=2e5?'3. 200k–<500k':'4. < 200k kWh';
-
-        // Solar detection (optimized)
-        const mp=Math.max(...vals.slice(6,10)),mm=Math.min(...vals.slice(10,16)),ep=Math.max(...vals.slice(16,20));
-        const nb=(vals.slice(0,5).reduce((a,b)=>a+b,0)+vals[22]+vals[23])/7;
-        const sol=maxV>30&&mp>1.5*mm&&ep>1.5*mm&&mm<0.4*maxV&&nb<0.6*mp;
-
-        // AI 3 layers
-        let ind='Chưa xác định',meth='';
-        if(id&&referenceDatabase[id]){ind=referenceDatabase[id];meth='DATABASE';}
-        else{
-            const nlp=nlpPredict(name);
-            if(nlp){ind=nlp;meth='NLP';}
-            else if(maxV>0){
-                if(sess){
-                    try{
-                        const norm=vals.map(v=>v/maxV);
-                        const res=await sess.run({[sess.inputNames[0]]:new ort.Tensor('float32',new Float32Array(norm),[1,24])});
-                        const raw=res[sess.outputNames[0]].data[0];
-                        ind=(typeof raw==='number'||typeof raw==='bigint')?(OL[Number(raw)]??`Nhóm ${raw}`):String(raw);
-                        meth='ONNX';
-                    }catch(err){sess=null;}
-                }
-                if(!sess||meth!=='ONNX'){
-                    const nr=avgV>0?nb/avgV:0;
-                    const dr2=avgV>0?(vals.slice(8,17).reduce((a,b)=>a+b,0)/9)/avgV:0;
-                    const er=avgV>0?(vals.slice(17,22).reduce((a,b)=>a+b,0)/5)/avgV:0;
-                    if(cv>0.90&&nr>0.85)ind='Xay xát - Lau bóng gạo';
-                    else if(cv>0.90&&dr2>1.40)ind='Khai thác đá / Vật liệu XD';
-                    else if(nr>1.30&&er<0.70)ind='Sản xuất đồ uống';
-                    else if(nr>1.10&&dr2<1.05&&er<0.80)ind='Sản xuất nước đá';
-                    else if(nr<0.50&&dr2>1.50)ind='Da giày / Túi xách';
-                    else if(nr<0.65&&dr2>1.40&&er<0.80)ind='Khai thác đá / Vật liệu XD';
-                    else if(nr<0.65&&dr2>1.30)ind='Cơ khí / Kim loại';
-                    else if(cv<0.22)ind='Chăn nuôi / Nông nghiệp';
-                    else if(cv<0.32&&nr>0.78&&dr2>1.15)ind='Sản xuất cao su và nhựa';
-                    else if(cv>0.55&&nr>0.75&&dr2>1.20)ind='Cơ khí / Kim loại';
-                    else if(cv>0.40&&dr2>1.15&&er>0.95)ind='Chế biến thủy sản';
-                    else if(cv>0.35&&dr2>1.20&&er<0.92)ind='Chế biến thực phẩm';
-                    else if(cv<0.40&&nr>0.82&&er>0.98)ind='May mặc / Dệt nhuộm';
-                    else if(nr>1.00&&dr2>1.00&&cv>0.45)ind='Xay xát - Lau bóng gạo';
-                    else if(cv<0.35&&dr2>1.10)ind='Sản xuất giấy / Bao bì';
-                    else ind='Sản xuất / TM tổng hợp';
-                    meth='RULES';
-                }
-            }
+    let ind='Chưa xác định',meth='';
+    if(id&&referenceDatabase[id]){ind=referenceDatabase[id];meth='DATABASE';}
+    else{
+      const nlp=nlpPredict(name);
+      if(nlp){ind=nlp;meth='NLP';}
+      else if(maxV>0){
+        if(sess){
+          try{
+            const norm=vals.map(v=>v/maxV);
+            const res=await sess.run({[sess.inputNames[0]]:new ort.Tensor('float32',new Float32Array(norm),[1,24])});
+            const raw=res[sess.outputNames[0]].data[0];
+            ind=(typeof raw==='number'||typeof raw==='bigint')?(OL[Number(raw)]??`Nhóm ${raw}`):String(raw);
+            meth='ONNX';
+          }catch(err){sess=null;}
         }
-
-        // DR classification
-        let cat='1. Có tín hiệu dao động tải rõ',rsn='';
-        if(maxV===0){cat='2.2. Tải rất thấp hoặc bằng phẳng ở khung giờ khảo sát';rsn='Không sử dụng điện.';}
-        else if(peakAvg<lwT*maxV){cat='2.2. Tải rất thấp hoặc bằng phẳng ở khung giờ khảo sát';rsn=`CS tại khung giờ khảo sát (${peakAvg.toFixed(0)} kW) < ${(lwT*100).toFixed(0)}% Max.`;}
-        else if(cv<cvT){cat='2.1. Phụ tải chạy đều — ít biến động';rsn=`CV=${(cv*100).toFixed(1)}% < ngưỡng phẳng. Phụ tải ổn định, khó dịch chuyển mà không ảnh hưởng vận hành.`;}
-        else{rsn=`CV=${(cv*100).toFixed(1)}%, CS đỉnh=${peakAvg.toFixed(0)} kW.`;}
-        if(sol)rsn+=' [Nghi ngờ ĐMTMN].';
-
-        // Biên độ đỉnh-nền = peakAvg - baseline (chênh lệch CS khung giờ khảo sát so với ngoài giờ)
-        const blArr=vals.slice(0,si).concat(vals.slice(ei+1));
-        const bl=blArr.length>0?blArr.reduce((a,b)=>a+b,0)/blArr.length:0;
-        const drPotKw=Math.max(0,peakAvg-bl);
-        const flexPct=maxV>0?(drPotKw/maxV*100):0;
-
-        // Điểm tín hiệu kỹ thuật (0–100) — chỉ phản ánh đặc điểm đường cong, không kết luận khả năng dịch chuyển
-        const fs=Math.min(flexPct/50,1)*40;
-        const ss=Math.min(annual/1e6,1)*30;
-        const gs=cat.startsWith('1.')?20:cat.startsWith('2.1')?10:0;
-        const slS=sol?10:0;
-        const score=Math.round(fs+ss+gs+slS);
-
-        // Priority
-        let pri='D';
-        if(score>=50&&annual>=5e5)pri='A';
-        else if(score>=30&&annual>=2e5)pri='B';
-        else if(score>=15)pri='C';
-
-        const priLabel={A:'A — Đáng khảo sát trực tiếp',B:'B — Tìm hiểu thêm',C:'C — Theo dõi',D:'D — Tín hiệu yếu'}[pri];
-        const methLabel={DATABASE:'🗄️ Dữ liệu gốc',NLP:'🔍 Tên KH',ONNX:'🤖 AI ONNX',RULES:'📊 Rules'}[meth]||'';
-
-        out.push({
-            _vals:vals,_annual:annual,_vg:vg,_sol:sol,_ind:ind,_meth:meth,
-            _score:score,_pri:pri,_drKw:drPotKw,_flex:flexPct,
-            'Công ty ĐL':comp,'Mã KH':id,'Tên KH':name,'Loại Phụ Tải':loai,
-            'Nhóm Tín hiệu Kỹ thuật':priLabel,'Điểm Tín hiệu (0-100)':score,
-            'Biên độ Đỉnh-Nền (kW)':Math.round(drPotKw),'Mức dao động tải đỉnh (%)':flexPct.toFixed(1),
-            'Công suất Max (kW)':maxV.toFixed(1),'CS TB Khung giờ khảo sát (kW)':peakAvg.toFixed(1),
-            'CV (%)': (cv*100).toFixed(1)+'%','Dự báo SL Năm (kWh)':Math.round(annual),
-            'Nhóm Sản lượng':vg,'Dự báo Ngành Nghề':ind,'PP Nhận diện':methLabel,
-            'Dự báo ĐMTMN':sol?'Có (Duck Curve)':'Không rõ',
-            'Kết quả Phân loại':cat,'Diễn giải (tín hiệu kỹ thuật — cần xác nhận qua thương lượng)':rsn,
-        });
+        if(!sess||meth!=='ONNX'){
+          const nr=avgV>0?nb/avgV:0;
+          const dr2=avgV>0?(vals.slice(8,17).reduce((a,b)=>a+b,0)/9)/avgV:0;
+          const er=avgV>0?(vals.slice(17,22).reduce((a,b)=>a+b,0)/5)/avgV:0;
+          if(cv>0.90&&nr>0.85)ind='Xay xát - Lau bóng gạo';
+          else if(cv>0.90&&dr2>1.40)ind='Khai thác đá / Vật liệu XD';
+          else if(nr>1.30&&er<0.70)ind='Sản xuất đồ uống';
+          else if(nr>1.10&&dr2<1.05&&er<0.80)ind='Sản xuất nước đá';
+          else if(nr<0.50&&dr2>1.50)ind='Da giày / Túi xách';
+          else if(nr<0.65&&dr2>1.40&&er<0.80)ind='Khai thác đá / Vật liệu XD';
+          else if(nr<0.65&&dr2>1.30)ind='Cơ khí / Kim loại';
+          else if(cv<0.22)ind='Chăn nuôi / Nông nghiệp';
+          else if(cv<0.32&&nr>0.78&&dr2>1.15)ind='Sản xuất cao su và nhựa';
+          else if(cv>0.55&&nr>0.75&&dr2>1.20)ind='Cơ khí / Kim loại';
+          else if(cv>0.40&&dr2>1.15&&er>0.95)ind='Chế biến thủy sản';
+          else if(cv>0.35&&dr2>1.20&&er<0.92)ind='Chế biến thực phẩm';
+          else if(cv<0.40&&nr>0.82&&er>0.98)ind='May mặc / Dệt nhuộm';
+          else if(nr>1.00&&dr2>1.00&&cv>0.45)ind='Xay xát - Lau bóng gạo';
+          else if(cv<0.35&&dr2>1.10)ind='Sản xuất giấy / Bao bì';
+          else ind='Sản xuất / TM tổng hợp';
+          meth='RULES';
+        }
+      }
     }
-    finalData=out;
-    updateKPIs(); renderAllCharts(); populateDropdowns();
-}
 
-function updateKPIs(){
-    let tot=0,ok=0,flat=0,low=0,sol=0,drMw=0,pa=0;
-    finalData.forEach(d=>{
-        tot++;
-        if(d['Kết quả Phân loại'].startsWith('1.'))ok++;
-        else if(d['Kết quả Phân loại'].startsWith('2.1'))flat++;
-        else low++;
-        if(d._sol)sol++;
-        drMw+=d._drKw;
-        if(d._pri==='A')pa++;
+    let cat='1. Có tín hiệu dao động tải rõ',rsn='';
+    if(maxV===0){cat='2.2. Tải rất thấp hoặc bằng phẳng ở khung giờ khảo sát';rsn='Không sử dụng điện.';}
+    else if(peakAvg<lwT*maxV){cat='2.2. Tải rất thấp hoặc bằng phẳng ở khung giờ khảo sát';rsn=`CS tại khung giờ khảo sát (${peakAvg.toFixed(0)} kW) < ${(lwT*100).toFixed(0)}% Max.`;}
+    else if(cv<cvT){cat='2.1. Phụ tải chạy đều — ít biến động';rsn=`CV=${(cv*100).toFixed(1)}% < ngưỡng phẳng. Phụ tải ổn định.`;}
+    else{rsn=`CV=${(cv*100).toFixed(1)}%, CS tại khung giờ khảo sát=${peakAvg.toFixed(0)} kW.`;}
+    if(sol)rsn+=' [Nghi ngờ ĐMTMN].';
+
+    const blArr=vals.slice(0,si).concat(vals.slice(ei+1));
+    const bl=blArr.length>0?blArr.reduce((a,b)=>a+b,0)/blArr.length:0;
+    const drKw=Math.max(0,peakAvg-bl);
+    const flex=maxV>0?(drKw/maxV*100):0;
+    const fs=Math.min(flex/50,1)*40,ss=Math.min(annual/1e6,1)*30;
+    const gs=cat.startsWith('1.')?20:cat.startsWith('2.1')?10:0;
+    const score=Math.round(fs+ss+gs+(sol?10:0));
+    let pri='D';
+    if(score>=50&&annual>=5e5)pri='A';
+    else if(score>=30&&annual>=2e5)pri='B';
+    else if(score>=15)pri='C';
+    const priLabel={A:'A — Đáng khảo sát',B:'B — Tìm hiểu thêm',C:'C — Theo dõi',D:'D — Tín hiệu yếu'}[pri];
+    const methLabel={DATABASE:'🗄️ Dữ liệu gốc',NLP:'🔍 Tên KH',ONNX:'🤖 AI ONNX',RULES:'📊 Rules'}[meth]||'';
+
+    out.push({
+      _vals:vals,_annual:annual,_vg:vg,_sol:sol,_ind:ind,_meth:meth,
+      _score:score,_pri:pri,_drKw:drKw,_flex:flex,
+      'Công ty ĐL':comp,'Mã KH':id,'Tên KH':name,'Loại Phụ Tải':loai,
+      'Nhóm Tín hiệu Kỹ thuật':priLabel,'Điểm Tín hiệu (0-100)':score,
+      'Biên độ Đỉnh-Nền (kW)':Math.round(drKw),'Mức dao động tải đỉnh (%)':flex.toFixed(1),
+      'Công suất Max (kW)':maxV.toFixed(1),'CS TB Khung giờ khảo sát (kW)':peakAvg.toFixed(1),
+      'CV (%)': (cv*100).toFixed(1)+'%','Dự báo SL Năm (kWh)':Math.round(annual),
+      'Nhóm Sản lượng':vg,'Dự báo Ngành Nghề':ind,'PP Nhận diện':methLabel,
+      'Dự báo ĐMTMN':sol?'Có (Duck Curve)':'Không rõ',
+      'Kết quả Phân loại':cat,
+      'Diễn giải (tín hiệu kỹ thuật — cần xác nhận qua thương lượng thực tế)':rsn,
     });
-    document.getElementById('s-total').innerText=tot;
-    document.getElementById('s-ok').innerText=ok;
-    document.getElementById('s-flat').innerText=flat;
-    document.getElementById('s-low').innerText=low;
-    document.getElementById('s-solar').innerText=sol;
-    document.getElementById('s-dr-mw').innerText=(drMw/1000).toFixed(1)+' MW';
-    document.getElementById('s-pa').innerText=pa;
-    document.getElementById('results').style.display='block';
-    document.getElementById('exportBar').style.display='flex';
+  }
+  finalData=out;
+  updateKPIs(); renderAllCharts(); populateAllDropdowns();
 }
 
+// ══════════════════════════════════════════════════════
+// KPIs
+// ══════════════════════════════════════════════════════
+function updateKPIs(){
+  let tot=0,ok=0,flat=0,low=0,sol=0,drMw=0,pa=0;
+  finalData.forEach(d=>{
+    tot++;
+    if(d['Kết quả Phân loại'].startsWith('1.'))ok++;
+    else if(d['Kết quả Phân loại'].startsWith('2.1'))flat++;
+    else low++;
+    if(d._sol)sol++;
+    drMw+=d._drKw;
+    if(d._pri==='A')pa++;
+  });
+  document.getElementById('s-total').innerText=tot;
+  document.getElementById('s-ok').innerText=ok;
+  document.getElementById('s-flat').innerText=flat;
+  document.getElementById('s-low').innerText=low;
+  document.getElementById('s-solar').innerText=sol;
+  document.getElementById('s-dr-mw').innerText=(drMw/1000).toFixed(1)+' MW';
+  document.getElementById('s-pa').innerText=pa;
+  document.getElementById('exportBar').style.display='flex';
+}
+
+// ══════════════════════════════════════════════════════
+// CHARTS — TAB TỔNG QUAN
+// ══════════════════════════════════════════════════════
 function renderAllCharts(){
-    renderOvCharts(); renderDrChart(); renderPrioChart(); renderIndChart();
-    renderPrioTable(); renderUnitTable();
+  renderOvCharts(); renderSpcChart(); renderDrChart(); renderPrioChart(); renderIndChart();
+  renderPrioTable(); renderUnitTable();
 }
 
 function renderOvCharts(){
-    const ok=finalData.filter(d=>d['Kết quả Phân loại'].startsWith('1.')).length;
-    const fl=finalData.filter(d=>d['Kết quả Phân loại'].startsWith('2.1')).length;
-    const lw=finalData.filter(d=>d['Kết quả Phân loại'].startsWith('2.2')).length;
-    if(myPie)myPie.destroy();
-    myPie=new Chart(document.getElementById('pieChart'),{type:'doughnut',data:{labels:['Tín hiệu rõ (1)','Phụ tải đều (2.1)','Tải thấp (2.2)'],datasets:[{data:[ok,fl,lw],backgroundColor:['#1a7a4a','#d97706','#c0392b']}]},options:{plugins:{legend:{position:'bottom'},title:{display:true,text:'Cơ cấu Phân loại Điều chỉnh Phụ tải'}}}});
-    const um={};
-    finalData.forEach(d=>{const u=d['Công ty ĐL'].replace('CÔNG TY ĐIỆN LỰC','PC').replace('Công ty Điện lực','PC');if(!um[u])um[u]={ok:0,fl:0,lw:0};if(d['Kết quả Phân loại'].startsWith('1.'))um[u].ok++;else if(d['Kết quả Phân loại'].startsWith('2.1'))um[u].fl++;else um[u].lw++;});
-    const lb=Object.keys(um).sort();
-    if(myBar)myBar.destroy();
-    myBar=new Chart(document.getElementById('barChart'),{type:'bar',data:{labels:lb,datasets:[{label:'Tín hiệu rõ (1)',data:lb.map(l=>um[l].ok),backgroundColor:'#1a7a4a'},{label:'Phụ tải đều (2.1)',data:lb.map(l=>um[l].fl),backgroundColor:'#d97706'},{label:'Tải thấp (2.2)',data:lb.map(l=>um[l].lw),backgroundColor:'#c0392b'}]},options:{scales:{x:{stacked:true},y:{stacked:true}},plugins:{legend:{position:'bottom'},title:{display:true,text:'Phân loại theo Công ty ĐL'}}}});
+  const ok=finalData.filter(d=>d['Kết quả Phân loại'].startsWith('1.')).length;
+  const fl=finalData.filter(d=>d['Kết quả Phân loại'].startsWith('2.1')).length;
+  const lw=finalData.filter(d=>d['Kết quả Phân loại'].startsWith('2.2')).length;
+  if(myPie)myPie.destroy();
+  myPie=new Chart(document.getElementById('pieChart'),{
+    type:'doughnut',
+    data:{labels:['Tín hiệu rõ (1)','Phụ tải đều (2.1)','Tải thấp (2.2)'],
+          datasets:[{data:[ok,fl,lw],backgroundColor:['#1a7a4a','#d97706','#c0392b']}]},
+    options:{plugins:{legend:{position:'bottom'},title:{display:true,text:'Cơ cấu Phân loại'}}}
+  });
+  const um={};
+  finalData.forEach(d=>{
+    const u=d['Công ty ĐL'].replace('CÔNG TY ĐIỆN LỰC','PC').replace('Công ty Điện lực','PC');
+    if(!um[u])um[u]={ok:0,fl:0,lw:0};
+    if(d['Kết quả Phân loại'].startsWith('1.'))um[u].ok++;
+    else if(d['Kết quả Phân loại'].startsWith('2.1'))um[u].fl++;
+    else um[u].lw++;
+  });
+  const lb=Object.keys(um).sort();
+  if(myBar)myBar.destroy();
+  myBar=new Chart(document.getElementById('barChart'),{
+    type:'bar',
+    data:{labels:lb,datasets:[
+      {label:'Tín hiệu rõ (1)',data:lb.map(l=>um[l].ok),backgroundColor:'#1a7a4a'},
+      {label:'Phụ tải đều (2.1)',data:lb.map(l=>um[l].fl),backgroundColor:'#d97706'},
+      {label:'Tải thấp (2.2)',data:lb.map(l=>um[l].lw),backgroundColor:'#c0392b'},
+    ]},
+    options:{scales:{x:{stacked:true},y:{stacked:true}},
+             plugins:{legend:{position:'bottom'},title:{display:true,text:'Phân loại theo Công ty ĐL'}}}
+  });
+}
+
+// Đường cong tổng hợp SPC — KHÔNG phân nhóm, chỉ 1 đường tổng
+function renderSpcChart(){
+  const total=Array(24).fill(0);
+  finalData.forEach(d=>{for(let i=0;i<24;i++)total[i]+=d._vals[i];});
+  if(mySpc)mySpc.destroy();
+  mySpc=new Chart(document.getElementById('spcChart'),{
+    type:'line',
+    data:{labels:TL,datasets:[{
+      label:'Tổng công suất EVNSPC (kW)',data:total,
+      borderColor:'#004a99',backgroundColor:'#004a9922',
+      borderWidth:2.5,fill:true,tension:0.3,pointRadius:0
+    }]},
+    options:{responsive:true,plugins:{legend:{display:false},
+      title:{display:true,text:'Đường cong phụ tải tổng — EVNSPC'}},
+      scales:{y:{beginAtZero:true}}}
+  });
+}
+
+// Đường cong theo CTĐL — 1 đường tổng theo công ty
+function drawGroupChart(){
+  const comp=document.getElementById('companySelect').value;
+  const fd=comp==='ALL'?finalData:finalData.filter(d=>d['Công ty ĐL']===comp);
+  const total=Array(24).fill(0);
+  fd.forEach(d=>{for(let i=0;i<24;i++)total[i]+=d._vals[i];});
+  if(myGrp)myGrp.destroy();
+  myGrp=new Chart(document.getElementById('groupChart'),{
+    type:'line',
+    data:{labels:TL,datasets:[{
+      label:'Tổng công suất (kW)',data:total,
+      borderColor:'#0e7490',backgroundColor:'#0e749022',
+      borderWidth:2.5,fill:true,tension:0.3,pointRadius:0
+    }]},
+    options:{responsive:true,plugins:{legend:{display:false},
+      title:{display:true,text:comp==='ALL'?'Toàn bộ':comp}},
+      scales:{y:{beginAtZero:true}}}
+  });
 }
 
 function renderDrChart(){
-    const um={};
-    finalData.forEach(d=>{const u=d['Công ty ĐL'].replace('CÔNG TY ĐIỆN LỰC','PC').replace('Công ty Điện lực','PC');if(!um[u])um[u]=0;um[u]+=d._drKw;});
-    const s=Object.entries(um).sort((a,b)=>b[1]-a[1]);
-    if(myDr)myDr.destroy();
-    myDr=new Chart(document.getElementById('drChart'),{type:'bar',data:{labels:s.map(x=>x[0]),datasets:[{label:'Biên độ đỉnh-nền (MW)',data:s.map(x=>+(x[1]/1000).toFixed(2)),backgroundColor:'#0e7490'}]},options:{indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{title:{display:true,text:'MW'}}}}});
+  const um={};
+  finalData.forEach(d=>{
+    const u=d['Công ty ĐL'].replace('CÔNG TY ĐIỆN LỰC','PC').replace('Công ty Điện lực','PC');
+    if(!um[u])um[u]=0; um[u]+=d._drKw;
+  });
+  const s=Object.entries(um).sort((a,b)=>b[1]-a[1]);
+  if(myDr)myDr.destroy();
+  myDr=new Chart(document.getElementById('drChart'),{
+    type:'bar',
+    data:{labels:s.map(x=>x[0]),datasets:[{label:'MW',data:s.map(x=>+(x[1]/1000).toFixed(2)),backgroundColor:'#0e7490'}]},
+    options:{indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{title:{display:true,text:'MW'}}}}
+  });
 }
 
 function renderPrioChart(){
-    const c={A:0,B:0,C:0,D:0};
-    finalData.forEach(d=>c[d._pri]++);
-    if(myPrio)myPrio.destroy();
-    myPrio=new Chart(document.getElementById('prioChart'),{type:'doughnut',data:{labels:['A — Đáng khảo sát','B — Tìm hiểu thêm','C — Theo dõi','D — Tín hiệu yếu'],datasets:[{data:[c.A,c.B,c.C,c.D],backgroundColor:['#0e7490','#1d4ed8','#d97706','#c0392b']}]},options:{plugins:{legend:{position:'bottom'},title:{display:true,text:'Phân bổ Nhóm Tín hiệu Kỹ thuật'}}}});
+  const c={A:0,B:0,C:0,D:0};
+  finalData.forEach(d=>c[d._pri]++);
+  if(myPrio)myPrio.destroy();
+  myPrio=new Chart(document.getElementById('prioChart'),{
+    type:'doughnut',
+    data:{labels:['A — Đáng khảo sát','B — Tìm hiểu','C — Theo dõi','D — Tín hiệu yếu'],
+          datasets:[{data:[c.A,c.B,c.C,c.D],backgroundColor:['#0e7490','#1d4ed8','#d97706','#c0392b']}]},
+    options:{plugins:{legend:{position:'bottom'},title:{display:true,text:'Phân bổ Nhóm Tín hiệu'}}}
+  });
 }
 
 function renderIndChart(){
-    const m={};
-    finalData.forEach(d=>{const i=d['Dự báo Ngành Nghề']||'Khác';if(!m[i])m[i]=0;m[i]+=d._drKw;});
-    const top=Object.entries(m).sort((a,b)=>b[1]-a[1]).slice(0,10);
-    if(myInd)myInd.destroy();
-    myInd=new Chart(document.getElementById('indChart'),{type:'bar',data:{labels:top.map(x=>x[0].length>20?x[0].substring(0,18)+'…':x[0]),datasets:[{label:'MW',data:top.map(x=>+(x[1]/1000).toFixed(2)),backgroundColor:'#6d28d9'}]},options:{indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{title:{display:true,text:'MW'}}}}});
+  const m={};
+  finalData.forEach(d=>{const i=d['Dự báo Ngành Nghề']||'Khác';if(!m[i])m[i]=0;m[i]+=d._drKw;});
+  const top=Object.entries(m).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  if(myInd)myInd.destroy();
+  myInd=new Chart(document.getElementById('indChart'),{
+    type:'bar',
+    data:{labels:top.map(x=>x[0].length>20?x[0].substring(0,18)+'…':x[0]),
+          datasets:[{label:'MW',data:top.map(x=>+(x[1]/1000).toFixed(2)),backgroundColor:'#6d28d9'}]},
+    options:{indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{title:{display:true,text:'MW'}}}}
+  });
 }
 
-function populateDropdowns(){
-    document.getElementById('customerSelect').innerHTML=finalData.map((d,i)=>{
-        const ic=d._sol?'☀️ ':'',g=d['Kết quả Phân loại'].substring(0,3);
-        return `<option value="${i}">${ic}[${g}][${d._pri}] ${d['Tên KH']}</option>`;
-    }).join('');
-    const cos=[...new Set(finalData.map(d=>d['Công ty ĐL']))].sort();
-    const coHtml='<option value="ALL">-- Toàn bộ --</option>'+cos.map(c=>`<option value="${c}">${c}</option>`).join('');
-    document.getElementById('companySelect').innerHTML=coHtml;
-    document.getElementById('filterC2').innerHTML='<option value="ALL">Tất cả Công ty ĐL</option>'+cos.map(c=>`<option value="${c}">${c}</option>`).join('');
-    if(finalData.length>0){drawCustomerChart();drawGroupChart();}
+// ══════════════════════════════════════════════════════
+// DROPDOWNS — cascade: Nhóm → CTĐL → KH
+// ══════════════════════════════════════════════════════
+function populateAllDropdowns(){
+  // CTĐL cho tab tổng quan
+  const cos=[...new Set(finalData.map(d=>d['Công ty ĐL']))].sort();
+  document.getElementById('companySelect').innerHTML=
+    '<option value="ALL">-- Toàn bộ EVNSPC --</option>'+cos.map(c=>`<option value="${c}">${c}</option>`).join('');
+  drawGroupChart();
+
+  // CTĐL cho tab chi tiết
+  document.getElementById('filterCompanyDetail').innerHTML=
+    '<option value="ALL">Tất cả</option>'+cos.map(c=>`<option value="${c}">${c}</option>`).join('');
+
+  // Build danh sách KH ban đầu
+  rebuildCustomerSelect();
+  if(finalData.length>0) drawCustomerChart();
 }
 
+function getFilteredForCascade(){
+  const grp=document.getElementById('filterGroup').value;
+  const comp=document.getElementById('filterCompanyDetail').value;
+  return finalData.filter(d=>{
+    if(grp!=='ALL'&&!d['Kết quả Phân loại'].startsWith(grp)) return false;
+    if(comp!=='ALL'&&d['Công ty ĐL']!==comp) return false;
+    return true;
+  });
+}
+
+function rebuildCustomerSelect(){
+  const fd=getFilteredForCascade();
+  document.getElementById('customerSelect').innerHTML=fd.map((d,i)=>{
+    const ic=d._sol?'☀️ ':'';
+    const grpShort=d['Kết quả Phân loại'].startsWith('1.')?'1':d['Kết quả Phân loại'].startsWith('2.1')?'2.1':'2.2';
+    return `<option value="${finalData.indexOf(d)}">${ic}[${grpShort}][${d._pri}] ${d['Tên KH']}</option>`;
+  }).join('');
+}
+
+function onGroupChange(){ rebuildCustomerSelect(); if(finalData.length>0)drawCustomerChart(); renderPrioTable(); }
+function onCompanyDetailChange(){ rebuildCustomerSelect(); if(finalData.length>0)drawCustomerChart(); renderPrioTable(); }
+
+// ══════════════════════════════════════════════════════
+// CUSTOMER CHART — Tab Chi tiết
+// ══════════════════════════════════════════════════════
 function drawCustomerChart(){
-    const idx=+document.getElementById('customerSelect').value;
-    if(!finalData[idx])return;
-    const d=finalData[idx];
-    const si=+document.getElementById('timeStart').value;
-    const ei=+document.getElementById('timeEnd').value;
-    const pc={A:'b-pa',B:'b-pb',C:'b-pc',D:'b-pd'}[d._pri];
-    const mc={DATABASE:'b-db',NLP:'b-nlp',ONNX:'b-onnx',RULES:'b-rules'}[d._meth]||'b-rules';
-    const mi={DATABASE:'🗄️',NLP:'🔍',ONNX:'🤖',RULES:'📊'}[d._meth]||'📊';
-    document.getElementById('custBadges').innerHTML=`
-        <span class="badge b-est">⚡ ${Math.round(d._annual/1000).toLocaleString('vi-VN')} MWh/năm</span>
-        <span class="badge ${pc}">🎯 Nhóm ${d._pri}</span>
-        <span class="badge b-score">Điểm tín hiệu: ${d._score}/100</span>
-        <span class="badge b-score">📊 Biên độ đỉnh-nền: ${Math.round(d._drKw)} kW</span>
-        <span class="badge ${mc}">${mi} ${d._ind}</span>
-        ${d._sol?'<span class="badge b-solar">☀️ Nghi ngờ ĐMTMN</span>':''}
-    `;
-    document.getElementById('drBar').style.display='block';
-    document.getElementById('drFill').style.width=Math.min(d._flex,100).toFixed(1)+'%';
-    const col=d['Kết quả Phân loại'].startsWith('2.1')?'#d97706':d['Kết quả Phân loại'].startsWith('2.2')?'#c0392b':'#1a7a4a';
-    if(myCust)myCust.destroy();
-    const peakPl={id:'pz',beforeDraw(c){const{ctx,chartArea:{left,right,top,bottom},scales:{x}}=c;const x1=x.getPixelForValue(si),x2=x.getPixelForValue(ei);ctx.save();ctx.fillStyle='rgba(239,68,68,0.10)';ctx.fillRect(x1,top,x2-x1,bottom-top);ctx.restore();}};
-    myCust=new Chart(document.getElementById('custChart'),{type:'line',data:{labels:TL,datasets:[{label:'CS (kW)',data:d._vals,borderColor:col,backgroundColor:col+'22',borderWidth:2,fill:true,tension:0.3,pointRadius:2}]},options:{responsive:true,plugins:{title:{display:true,text:`Phụ tải: ${d['Tên KH']}`},legend:{display:false}},scales:{y:{beginAtZero:true}}},plugins:[peakPl]});
+  const idx=+document.getElementById('customerSelect').value;
+  if(isNaN(idx)||!finalData[idx])return;
+  const d=finalData[idx];
+  const si=+document.getElementById('timeStart').value;
+  const ei=+document.getElementById('timeEnd').value;
+
+  const pc={A:'b-pa',B:'b-pb',C:'b-pc',D:'b-pd'}[d._pri];
+  const mc={DATABASE:'b-db',NLP:'b-nlp',ONNX:'b-onnx',RULES:'b-rules'}[d._meth]||'b-rules';
+  const mi={DATABASE:'🗄️',NLP:'🔍',ONNX:'🤖',RULES:'📊'}[d._meth]||'📊';
+  document.getElementById('custBadges').innerHTML=`
+    <span class="badge b-est">⚡ ${Math.round(d._annual/1000).toLocaleString('vi-VN')} MWh/năm — ${d._vg}</span>
+    <span class="badge ${pc}">🎯 Nhóm ${d._pri}</span>
+    <span class="badge b-score">Điểm tín hiệu: ${d._score}/100</span>
+    <span class="badge b-score">📊 Biên độ đỉnh-nền: ${Math.round(d._drKw)} kW</span>
+    <span class="badge ${mc}">${mi} ${d._ind}</span>
+    ${d._sol?'<span class="badge b-solar">☀️ Nghi ngờ ĐMTMN</span>':''}
+  `;
+  document.getElementById('drBar').style.display='block';
+  document.getElementById('drFill').style.width=Math.min(d._flex,100).toFixed(1)+'%';
+
+  const col=d['Kết quả Phân loại'].startsWith('2.1')?'#d97706':
+            d['Kết quả Phân loại'].startsWith('2.2')?'#c0392b':'#1a7a4a';
+
+  if(myCust)myCust.destroy();
+  const peakPl={id:'pz',beforeDraw(c){
+    const{ctx,chartArea:{top,bottom},scales:{x}}=c;
+    const x1=x.getPixelForValue(si),x2=x.getPixelForValue(ei);
+    ctx.save();ctx.fillStyle='rgba(239,68,68,0.10)';
+    ctx.fillRect(x1,top,x2-x1,bottom-top);ctx.restore();
+  }};
+  myCust=new Chart(document.getElementById('custChart'),{
+    type:'line',
+    data:{labels:TL,datasets:[{label:'CS (kW)',data:d._vals,
+      borderColor:col,backgroundColor:col+'22',borderWidth:2,fill:true,tension:0.3,pointRadius:2}]},
+    options:{responsive:true,
+      plugins:{title:{display:true,text:d['Tên KH']},legend:{display:false}},
+      scales:{y:{beginAtZero:true}}},
+    plugins:[peakPl]
+  });
 }
 
-function drawGroupChart(){
-    const comp=document.getElementById('companySelect').value;
-    const fd=comp==='ALL'?finalData:finalData.filter(d=>d['Công ty ĐL']===comp);
-    const s1=Array(24).fill(0),s21=Array(24).fill(0),s22=Array(24).fill(0);
-    fd.forEach(d=>{const a=d['Kết quả Phân loại'].startsWith('1.')?s1:d['Kết quả Phân loại'].startsWith('2.1')?s21:s22;for(let i=0;i<24;i++)a[i]+=d._vals[i];});
-    if(myGrp)myGrp.destroy();
-    myGrp=new Chart(document.getElementById('groupChart'),{type:'line',data:{labels:TL,datasets:[{label:'Nhóm 1 — Tín hiệu rõ',data:s1,borderColor:'#1a7a4a',tension:0.3,pointRadius:0},{label:'Nhóm 2.1 — Phụ tải đều',data:s21,borderColor:'#d97706',tension:0.3,pointRadius:0},{label:'Nhóm 2.2 — Tải thấp',data:s22,borderColor:'#c0392b',tension:0.3,pointRadius:0}]},options:{responsive:true,plugins:{title:{display:true,text:`Tổng công suất theo phân loại — ${comp==='ALL'?'Toàn bộ':comp}`},legend:{position:'bottom'}},scales:{y:{beginAtZero:true}}}});
-}
-
+// ══════════════════════════════════════════════════════
+// PRIORITY TABLE — Tab Chi tiết
+// ══════════════════════════════════════════════════════
 function renderPrioTable(){
-    const fp=document.getElementById('filterP').value;
-    const fc=document.getElementById('filterC2').value;
-    const fs=document.getElementById('searchKH').value.toLowerCase();
-    let data=finalData.filter(d=>{
-        if(fp!=='ALL'&&d._pri!==fp)return false;
-        if(fc!=='ALL'&&d['Công ty ĐL']!==fc)return false;
-        if(fs&&!d['Tên KH'].toLowerCase().includes(fs))return false;
-        return true;
-    }).sort((a,b)=>b._score-a._score);
-    document.getElementById('prioCount').innerText=`Đang hiển thị: ${data.length} KH`;
-    const pc={A:'#0e7490',B:'#1d4ed8',C:'#d97706',D:'#c0392b'};
-    document.getElementById('prioTbody').innerHTML=data.slice(0,500).map((d,i)=>
-        `<tr><td>${i+1}</td><td style="text-align:left;font-weight:600">${d['Tên KH']}</td>
-        <td style="font-size:11px">${d['Công ty ĐL'].replace('CÔNG TY ĐIỆN LỰC','PC').replace('Công ty Điện lực','PC')}</td>
-        <td>${d['Kết quả Phân loại'].substring(0,3)}</td>
-        <td><span style="background:${pc[d._pri]};color:white;padding:3px 8px;border-radius:12px;font-size:11px;font-weight:700">${d._pri}</span></td>
-        <td>${d._score}<div class="sbar"><div class="sfill" style="width:${d._score}%"></div></div></td>
-        <td style="font-weight:700;color:#0e7490">${Math.round(d._drKw).toLocaleString('vi-VN')}</td>
-        <td>${d._flex.toFixed(1)}%</td>
-        <td>${(d._annual/1000).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,',')}</td>
-        <td style="font-size:11px;text-align:left">${d._ind}</td>
-        <td>${d._sol?'☀️':'—'}</td></tr>`
-    ).join('');
+  const fp=document.getElementById('filterP').value;
+  const grp=document.getElementById('filterGroup').value;
+  const comp=document.getElementById('filterCompanyDetail').value;
+  const fs=document.getElementById('searchKH').value.toLowerCase();
+  let data=finalData.filter(d=>{
+    if(fp!=='ALL'&&d._pri!==fp)return false;
+    if(grp!=='ALL'&&!d['Kết quả Phân loại'].startsWith(grp))return false;
+    if(comp!=='ALL'&&d['Công ty ĐL']!==comp)return false;
+    if(fs&&!d['Tên KH'].toLowerCase().includes(fs))return false;
+    return true;
+  }).sort((a,b)=>b._score-a._score);
+  document.getElementById('prioCount').innerText=`${data.length} KH`;
+  const pc={A:'#0e7490',B:'#1d4ed8',C:'#d97706',D:'#c0392b'};
+  document.getElementById('prioTbody').innerHTML=data.slice(0,500).map((d,i)=>`
+    <tr style="cursor:pointer" onclick="selectCustomerFromTable(${finalData.indexOf(d)})">
+      <td>${i+1}</td>
+      <td style="text-align:left;font-weight:600">${d['Tên KH']}</td>
+      <td style="font-size:11px">${d['Công ty ĐL'].replace('CÔNG TY ĐIỆN LỰC','PC').replace('Công ty Điện lực','PC')}</td>
+      <td>${d['Kết quả Phân loại'].substring(0,3)}</td>
+      <td><span style="background:${pc[d._pri]};color:white;padding:2px 7px;border-radius:10px;font-size:11px;font-weight:700">${d._pri}</span></td>
+      <td>${d._score}<div class="sbar"><div class="sfill" style="width:${d._score}%"></div></div></td>
+      <td style="font-weight:700;color:#0e7490">${Math.round(d._drKw).toLocaleString('vi-VN')}</td>
+      <td>${(d._annual/1000).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,',')}</td>
+      <td style="font-size:11px;text-align:left">${d._ind}</td>
+      <td>${d._sol?'☀️':'—'}</td>
+    </tr>`).join('');
 }
 
+// Click row → cập nhật chart KH
+function selectCustomerFromTable(idx){
+  document.getElementById('customerSelect').value=idx;
+  drawCustomerChart();
+}
+
+// ══════════════════════════════════════════════════════
+// UNIT TABLE — Tab Tổng quan
+// ══════════════════════════════════════════════════════
 function renderUnitTable(){
-    const um={};
-    finalData.forEach(d=>{
-        const u=d['Công ty ĐL'];
-        if(!um[u])um[u]={ok:0,fl:0,lw:0,v1:0,v5:0,v2:0,vl:0,sol:0,pa:0,drMw:0,fxS:0,fxN:0};
-        const m=um[u];
-        if(d['Kết quả Phân loại'].startsWith('1.'))m.ok++;
-        else if(d['Kết quả Phân loại'].startsWith('2.1'))m.fl++;
-        else m.lw++;
-        if(d._vg.startsWith('1.'))m.v1++;else if(d._vg.startsWith('2.'))m.v5++;else if(d._vg.startsWith('3.'))m.v2++;else m.vl++;
-        if(d._sol)m.sol++;if(d._pri==='A')m.pa++;
-        m.drMw+=d._drKw;m.fxS+=d._flex;m.fxN++;
-    });
-    let html='',tot={ok:0,fl:0,lw:0,v1:0,v5:0,v2:0,vl:0,sol:0,pa:0,drMw:0};
-    Object.keys(um).sort().forEach(u=>{
-        const m=um[u],total=m.ok+m.fl+m.lw,fa=m.fxN>0?(m.fxS/m.fxN).toFixed(1):'0.0';
-        html+=`<tr><td style="text-align:left;font-weight:600">${u}</td>
-            <td style="color:#1a7a4a;font-weight:700">${m.ok}</td><td style="color:#d97706">${m.fl}</td>
-            <td style="color:#c0392b">${m.lw}</td><td style="font-weight:700">${total}</td>
-            <td>${m.v1}</td><td>${m.v5}</td><td>${m.v2}</td><td>${m.vl}</td>
-            <td style="color:#0e7490;font-weight:700">${m.pa}</td>
-            <td style="color:#6d28d9;font-weight:700">${(m.drMw/1000).toFixed(1)}</td>
-            <td>${fa}%</td><td style="color:#b45309;font-weight:700">${m.sol}</td></tr>`;
-        ['ok','fl','lw','v1','v5','v2','vl','sol','pa'].forEach(k=>tot[k]=(tot[k]||0)+m[k]);
-        tot.drMw=(tot.drMw||0)+m.drMw;
-    });
-    const tt=(tot.ok||0)+(tot.fl||0)+(tot.lw||0);
-    html+=`<tr style="background:#cce5ff;font-weight:700;color:#004a99">
-        <td style="text-align:left">TỔNG CỘNG</td>
-        <td style="color:#1a7a4a">${tot.ok}</td><td style="color:#d97706">${tot.fl}</td>
-        <td style="color:#c0392b">${tot.lw}</td><td>${tt}</td>
-        <td>${tot.v1}</td><td>${tot.v5}</td><td>${tot.v2}</td><td>${tot.vl}</td>
-        <td style="color:#0e7490">${tot.pa}</td>
-        <td style="color:#6d28d9">${(tot.drMw/1000).toFixed(1)}</td>
-        <td>—</td><td style="color:#b45309">${tot.sol}</td></tr>`;
-    document.getElementById('unitTbody').innerHTML=html;
+  const um={};
+  finalData.forEach(d=>{
+    const u=d['Công ty ĐL'];
+    if(!um[u])um[u]={ok:0,fl:0,lw:0,v1:0,v5:0,v2:0,vl:0,sol:0,pa:0,drMw:0,fxS:0,fxN:0};
+    const m=um[u];
+    if(d['Kết quả Phân loại'].startsWith('1.'))m.ok++;
+    else if(d['Kết quả Phân loại'].startsWith('2.1'))m.fl++;
+    else m.lw++;
+    if(d._vg.startsWith('1.'))m.v1++;else if(d._vg.startsWith('2.'))m.v5++;else if(d._vg.startsWith('3.'))m.v2++;else m.vl++;
+    if(d._sol)m.sol++;if(d._pri==='A')m.pa++;
+    m.drMw+=d._drKw;m.fxS+=d._flex;m.fxN++;
+  });
+  let html='',tot={ok:0,fl:0,lw:0,v1:0,v5:0,v2:0,vl:0,sol:0,pa:0,drMw:0};
+  Object.keys(um).sort().forEach(u=>{
+    const m=um[u],total=m.ok+m.fl+m.lw,fa=m.fxN>0?(m.fxS/m.fxN).toFixed(1):'0.0';
+    html+=`<tr>
+      <td style="text-align:left;font-weight:600">${u}</td>
+      <td style="color:#1a7a4a;font-weight:700">${m.ok}</td><td style="color:#d97706">${m.fl}</td>
+      <td style="color:#c0392b">${m.lw}</td><td style="font-weight:700">${total}</td>
+      <td>${m.v1}</td><td>${m.v5}</td><td>${m.v2}</td><td>${m.vl}</td>
+      <td style="color:#0e7490;font-weight:700">${m.pa}</td>
+      <td style="color:#6d28d9;font-weight:700">${(m.drMw/1000).toFixed(1)}</td>
+      <td>${fa}%</td><td style="color:#b45309;font-weight:700">${m.sol}</td>
+    </tr>`;
+    ['ok','fl','lw','v1','v5','v2','vl','sol','pa'].forEach(k=>tot[k]=(tot[k]||0)+m[k]);
+    tot.drMw=(tot.drMw||0)+m.drMw;
+  });
+  const tt=(tot.ok||0)+(tot.fl||0)+(tot.lw||0);
+  html+=`<tr style="background:#cce5ff;font-weight:700;color:#004a99">
+    <td style="text-align:left">TỔNG CỘNG</td>
+    <td style="color:#1a7a4a">${tot.ok}</td><td style="color:#d97706">${tot.fl}</td>
+    <td style="color:#c0392b">${tot.lw}</td><td>${tt}</td>
+    <td>${tot.v1}</td><td>${tot.v5}</td><td>${tot.v2}</td><td>${tot.vl}</td>
+    <td style="color:#0e7490">${tot.pa}</td>
+    <td style="color:#6d28d9">${(tot.drMw/1000).toFixed(1)}</td>
+    <td>—</td><td style="color:#b45309">${tot.sol}</td>
+  </tr>`;
+  document.getElementById('unitTbody').innerHTML=html;
 }
 
+// ══════════════════════════════════════════════════════
+// EXPORT
+// ══════════════════════════════════════════════════════
 function exportExcel(){
-    if(!finalData.length)return;
-    const rows=finalData.map(d=>{const r={...d};['_vals','_annual','_vg','_sol','_ind','_meth','_score','_pri','_drKw','_flex'].forEach(k=>delete r[k]);return r;});
-    const ws=XLSX.utils.json_to_sheet(rows);
-    const wb=XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb,ws,'PhanLoai_TinHieu_DayDu');
-    XLSX.writeFile(wb,'BaoCao_PhanLoai_TinHieu_2026.xlsx');
+  if(!finalData.length)return;
+  const rows=finalData.map(d=>{const r={...d};['_vals','_annual','_vg','_sol','_ind','_meth','_score','_pri','_drKw','_flex'].forEach(k=>delete r[k]);return r;});
+  const ws=XLSX.utils.json_to_sheet(rows);
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'PhanLoai_TinHieu_DayDu');
+  XLSX.writeFile(wb,'BaoCao_PhanLoai_TinHieu_2026.xlsx');
 }
-
 function exportPriorityExcel(){
-    if(!finalData.length)return;
-    const rows=finalData.filter(d=>d._pri==='A'||d._pri==='B').sort((a,b)=>b._score-a._score).map(d=>({
-        'Nhóm Tín hiệu':d['Nhóm Tín hiệu Kỹ thuật'],'Điểm Tín hiệu':d._score,
-        'Công ty ĐL':d['Công ty ĐL'],'Mã KH':d['Mã KH'],'Tên KH':d['Tên KH'],
-        'Biên độ Đỉnh-Nền (kW)':Math.round(d._drKw),'Mức dao động tải đỉnh (%)':d._flex.toFixed(1),
-        'SL Năm (kWh)':Math.round(d._annual),'Ngành nghề':d._ind,
-        'Kết quả Phân loại':d['Kết quả Phân loại'],'ĐMTMN':d._sol?'Có':'',
-        'Max (kW)':d['Công suất Max (kW)'],'CV (%)':d['CV (%)'],
-    }));
-    const ws=XLSX.utils.json_to_sheet(rows);
-    const wb=XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb,ws,'DanhSach_KhaoSat_AB');
-    XLSX.writeFile(wb,'DanhSach_KhaoSat_TinHieu_A_B_2026.xlsx');
+  if(!finalData.length)return;
+  const rows=finalData.filter(d=>d._pri==='A'||d._pri==='B').sort((a,b)=>b._score-a._score).map(d=>({
+    'Nhóm Tín hiệu':d['Nhóm Tín hiệu Kỹ thuật'],'Điểm Tín hiệu':d._score,
+    'Công ty ĐL':d['Công ty ĐL'],'Mã KH':d['Mã KH'],'Tên KH':d['Tên KH'],
+    'Biên độ Đỉnh-Nền (kW)':Math.round(d._drKw),'Mức dao động tải đỉnh (%)':d._flex.toFixed(1),
+    'SL Năm (kWh)':Math.round(d._annual),'Ngành nghề':d._ind,
+    'Kết quả Phân loại':d['Kết quả Phân loại'],'ĐMTMN':d._sol?'Có':'',
+    'Max (kW)':d['Công suất Max (kW)'],'CV (%)':d['CV (%)'],
+  }));
+  const ws=XLSX.utils.json_to_sheet(rows);
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'DanhSach_KhaoSat_AB');
+  XLSX.writeFile(wb,'DanhSach_KhaoSat_TinHieu_A_B_2026.xlsx');
 }
 </script>
 </body>
