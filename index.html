@@ -3,10 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Phân tích Phụ tải EVNSPC 2026</title>
+    <title>Phân tích Điều chỉnh Phụ tải (DR) EVNSPC 2026</title>
     
+    <!-- Tải thư viện XLSX để đọc file Excel -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- Tải thư viện Chart.js để vẽ biểu đồ -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- TẢI THƯ VIỆN ONNX RUNTIME CỦA MICROSOFT ĐỂ CHẠY AI -->
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
     
     <style>
@@ -227,7 +230,6 @@
         document.getElementById('btnExecute').disabled = true;
         showLoading("🤖 AI đang phân tích dữ liệu và nhận diện ngành nghề...");
         
-        // Cần gọi hàm async để chờ Model tải về
         setTimeout(async () => {
             await analyzeDataAsync(rawData);
             document.getElementById('btnExecute').disabled = false;
@@ -236,7 +238,6 @@
         }, 50);
     }
 
-    // HÀM CHÍNH ĐƯỢC CHUYỂN SANG DẠNG BẤT ĐỒNG BỘ ĐỂ CHẠY AI ONNX
     async function analyzeDataAsync(data) {
         const startIdx = parseInt(document.getElementById('timeStart').value);
         const endIdx = parseInt(document.getElementById('timeEnd').value);
@@ -252,11 +253,16 @@
         // 1. CỐ GẮNG TẢI MÔ HÌNH AI (ONNX)
         let aiSession = null;
         try {
-            // Tải file model.onnx (Yêu cầu phải up cùng thư mục trên GitHub/Netlify)
-            aiSession = await ort.InferenceSession.create('./model.onnx');
+            // [BẢN VÁ LỖI CỰC KỲ QUAN TRỌNG KHI CHẠY TRÊN GITHUB]
+            // Buộc thư viện ONNX phải tải file .wasm từ nguồn CDN quốc tế thay vì tìm ở GitHub
+            ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/';
+            
+            // Tải file mô hình AI (Đã bỏ dấu ./ để tránh lỗi đường dẫn tương đối)
+            aiSession = await ort.InferenceSession.create('model.onnx');
             console.log("✅ Tải Model AI ONNX thành công!");
         } catch (e) {
-            console.warn("⚠️ Không tìm thấy model.onnx. Hệ thống sẽ tự động dùng Hệ chuyên gia (Rules) dự phòng.");
+            console.error("⚠️ Lỗi khởi tạo AI ONNX:", e);
+            console.warn("Hệ thống sẽ lùi về dùng cơ chế phân tích dự phòng (Rules).");
         }
 
         let processedData = [];
@@ -289,12 +295,12 @@
             
             let hasSolar = (nightAvg > 10 && morningAvg > 10 && midDayAvg < (0.5 * nightAvg) && midDayAvg < (0.5 * morningAvg));
 
-            // ==== PHẦN DỰ BÁO NGÀNH NGHỀ ====
+            // ==== PHẦN DỰ BÁO NGÀNH NGHỀ BẰNG AI ====
             let predictedIndustry = "Chưa xác định";
 
             if (max > 0) {
                 if (aiSession) {
-                    // CÁCH 1: DÙNG AI ONNX ĐÃ HUẤN LUYỆN
+                    // DÙNG AI ONNX ĐÃ HUẤN LUYỆN
                     try {
                         let normalized_vals = vals.map(v => v / max);
                         // Đưa vào Tensor 32-bit (1 dòng, 24 cột)
@@ -302,13 +308,16 @@
                         let feeds = { float_input: tensor };
                         // Chạy dự đoán
                         let results = await aiSession.run(feeds);
-                        // Lấy kết quả từ biến output_label do skl2onnx tạo ra
-                        predictedIndustry = results.output_label.data[0]; 
+                        
+                        // Lấy ngõ ra đầu tiên tự động (thường là nhãn ngành nghề)
+                        let outputName = aiSession.outputNames[0];
+                        predictedIndustry = results[outputName].data[0]; 
                     } catch (err) {
+                        console.error("Lỗi khi chạy dự đoán AI cho KH:", err);
                         predictedIndustry = "Lỗi khi chạy AI";
                     }
                 } else {
-                    // CÁCH 2: HỆ CHUYÊN GIA DỰ PHÒNG (Khi chưa up file onnx)
+                    // CƠ CHẾ DỰ PHÒNG NẾU GITHUB BỊ LỖI MẠNG CHƯA TẢI ĐƯỢC AI
                     const nightLoadAvg = (vals[22] + vals[23] + vals[0] + vals[1] + vals[2] + vals[3] + vals[4]) / 7;
                     const dayLoadAvg = (vals[8] + vals[9] + vals[10] + vals[11] + vals[12] + vals[13] + vals[14] + vals[15] + vals[16]) / 9;
                     const eveningLoadAvg = (vals[17] + vals[18] + vals[19] + vals[20] + vals[21]) / 5;
