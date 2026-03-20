@@ -3,704 +3,664 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Phân tích Điều chỉnh Phụ tải (DR) EVNSPC 2026</title>
-    
-    <!-- Tải thư viện XLSX để đọc file Excel -->
+    <title>Phân tích Điều chỉnh & Dịch chuyển Phụ tải — EVNSPC 2026</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <!-- Tải thư viện Chart.js để vẽ biểu đồ -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <!-- TẢI THƯ VIỆN ONNX RUNTIME CỦA MICROSOFT ĐỂ CHẠY AI (Cố định bản 1.16.3) -->
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.16.3/dist/ort.min.js"></script>
-    
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 20px; background-color: #f0f2f5; color: #333; }
-        .container { max-width: 1350px; margin: auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
-        h2 { color: #004a99; text-align: center; margin-bottom: 30px; text-transform: uppercase; border-bottom: 2px solid #004a99; padding-bottom: 10px; }
-        .setup-section { display: grid; grid-template-columns: 1fr 1.5fr; gap: 20px; margin-bottom: 30px; }
-        .upload-box { border: 3px dashed #004a99; padding: 30px; text-align: center; border-radius: 10px; background: #f8fbff; transition: 0.3s; cursor: pointer; display: flex; flex-direction: column; justify-content: center; }
-        .upload-box:hover { background: #edf4ff; border-color: #007bff; }
-        .config-box { background: #fff; padding: 20px; border-radius: 10px; border: 1px solid #dee2e6; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
-        .config-box h3 { margin-top: 0; color: #333; font-size: 18px; margin-bottom: 15px;}
-        .param-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px; background: #f8fbff; padding: 15px; border-radius: 8px; border: 1px dashed #007bff; }
-        .param-item { display: flex; flex-direction: column; }
-        .param-item label { font-size: 13px; font-weight: bold; color: #004a99; margin-bottom: 5px; }
-        .param-item input, .param-item select { padding: 8px; border: 1px solid #ced4da; border-radius: 4px; font-size: 14px; }
-        .btn-execute { width: 100%; padding: 15px; background: #007bff; color: white; border: none; border-radius: 5px; font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.2s; box-shadow: 0 4px 6px rgba(0,123,255,0.2); margin-top: 5px; }
-        .btn-execute:hover:not(:disabled) { background: #0056b3; transform: translateY(-2px); }
-        .btn-execute:disabled { background: #6c757d; cursor: not-allowed; box-shadow: none; }
-        .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin: 25px 0; }
-        .card { padding: 20px; border-radius: 8px; text-align: center; color: white; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        .total { background: linear-gradient(135deg, #6c757d, #495057); }
-        .ok { background: linear-gradient(135deg, #28a745, #20c997); }
-        .flat { background: linear-gradient(135deg, #ffc107, #fd7e14); color: #fff; text-shadow: 1px 1px 2px rgba(0,0,0,0.2);}
-        .low { background: linear-gradient(135deg, #dc3545, #e83e8c); }
-        .solar { background: linear-gradient(135deg, #f39c12, #ffc107); color: #333; }
-        .charts-container { display: grid; grid-template-columns: 1fr 2fr; gap: 20px; margin-top: 30px; margin-bottom: 30px; }
-        .line-charts-container { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px; }
-        .chart-box { background: #fff; padding: 20px; border-radius: 8px; border: 1px solid #dee2e6; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
-        .control-group { margin-bottom: 15px; }
-        .control-group select { width: 100%; padding: 10px; border-radius: 5px; border: 1px solid #ced4da; font-size: 14px; }
-        .est-badge { display: inline-block; margin-top: 10px; padding: 8px 12px; background: #e8f4fd; border: 1px solid #b6d4fe; border-radius: 5px; color: #004a99; font-size: 14px; font-weight: bold; }
-        .solar-badge { display: none; margin-top: 10px; margin-left: 10px; padding: 8px 12px; background: #fff3cd; border: 1px solid #ffeeba; border-radius: 5px; color: #856404; font-size: 14px; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-        .industry-badge { display: inline-block; margin-top: 10px; margin-left: 10px; padding: 8px 12px; background: #e2e3e5; border: 1px solid #d6d8db; border-radius: 5px; color: #383d41; font-size: 14px; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-        
-        /* CSS cho các huy hiệu phân loại AI */
-        .badge-ai { background: #e2e3e5; border-color: #d6d8db; }
-        .badge-nlp { background: #d1e7dd; border-color: #badbcc; color: #0f5132 !important; }
-        .badge-db { background: #fff3cd; border-color: #ffeeba; color: #856404 !important; }
-        .badge-rules { background: #e0d9f7; border-color: #c4b5f4; color: #4a2d8f !important; }
-        
-        table { width: 100%; border-collapse: collapse; margin-top: 25px; background: white; font-size: 13px; }
-        thead { position: sticky; top: 0; z-index: 10; }
-        th, td { border: 1px solid #dee2e6; padding: 10px 8px; text-align: center; }
-        th { color: white; }
-        tr:nth-child(even) { background-color: #f8f9fa; }
-        tr:hover { background-color: #e9ecef; }
-        .btn-export { display: none; margin: 20px auto; padding: 15px 35px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: 0.2s; }
-        .btn-export:hover { background: #218838; transform: translateY(-2px); }
-        .table-container { max-height: 500px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 8px; }
-        .section-title { color: #004a99; border-bottom: 2px solid #e9ecef; padding-bottom: 10px; margin-top: 40px; }
-        #loadingOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255, 255, 255, 0.9); display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; }
-        .spinner { border: 8px solid #f3f3f3; border-top: 8px solid #004a99; border-radius: 50%; width: 70px; height: 70px; animation: spin 1s linear infinite; margin-bottom: 20px; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        #loadingMessage { font-size: 20px; color: #004a99; font-weight: bold; margin-bottom: 10px; }
-        #loadingSubMessage { font-size: 14px; color: #666; }
+        :root {
+            --blue:#004a99;--blue-lt:#e8f0fb;--blue-mid:#0056b3;
+            --green:#1a7a4a;--green-lt:#d4f0e3;
+            --amber:#b45309;--amber-lt:#fef3c7;
+            --red:#c0392b;--red-lt:#fde8e8;
+            --gray:#495057;--gray-lt:#f1f3f5;
+            --teal:#0e7490;--teal-lt:#e0f7fa;
+            --purple:#6d28d9;--purple-lt:#ede9fe;
+            --border:#dee2e6;--radius:8px;--shadow:0 2px 8px rgba(0,0,0,0.07);
+        }
+        *{box-sizing:border-box;}
+        body{font-family:'Segoe UI',system-ui,sans-serif;margin:0;padding:16px;background:#f0f2f5;color:#212529;font-size:14px;}
+        .container{max-width:1400px;margin:auto;}
+        .header{background:var(--blue);color:white;border-radius:10px;padding:18px 24px;margin-bottom:16px;}
+        .header h1{margin:0;font-size:18px;font-weight:700;}
+        .header .sub{font-size:12px;opacity:0.8;margin-top:3px;}
+        .setup-section{display:grid;grid-template-columns:1fr 1.6fr;gap:14px;margin-bottom:16px;}
+        .upload-box{border:2px dashed #aac4e8;padding:24px 20px;text-align:center;border-radius:10px;background:#f8fbff;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:0.2s;min-height:140px;}
+        .upload-box:hover{background:#edf4ff;border-color:var(--blue);}
+        .config-box{background:white;padding:18px;border-radius:10px;border:1px solid var(--border);box-shadow:var(--shadow);}
+        .config-box h3{margin:0 0 12px;color:var(--blue);font-size:15px;}
+        .param-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;background:#f8fbff;padding:12px;border-radius:6px;border:1px dashed #aac4e8;}
+        .param-item{display:flex;flex-direction:column;gap:4px;}
+        .param-item label{font-size:12px;font-weight:600;color:var(--blue);}
+        .param-item input,.param-item select{padding:7px;border:1px solid var(--border);border-radius:4px;font-size:13px;}
+        .btn-execute{width:100%;padding:13px;background:var(--blue);color:white;border:none;border-radius:6px;font-size:15px;font-weight:700;cursor:pointer;margin-top:10px;transition:0.2s;}
+        .btn-execute:hover:not(:disabled){background:var(--blue-mid);}
+        .btn-execute:disabled{background:#adb5bd;cursor:not-allowed;}
+        .kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:16px 0;}
+        .kpi{padding:14px 16px;border-radius:var(--radius);color:white;font-weight:700;text-align:center;}
+        .kpi .kv{font-size:26px;display:block;margin:4px 0;}
+        .kpi .ks{font-size:11px;opacity:0.9;}
+        .kpi-total{background:linear-gradient(135deg,#495057,#343a40);}
+        .kpi-ok{background:linear-gradient(135deg,#1a7a4a,#20c997);}
+        .kpi-flat{background:linear-gradient(135deg,#d97706,#f59e0b);}
+        .kpi-low{background:linear-gradient(135deg,#c0392b,#e74c3c);}
+        .kpi-solar{background:linear-gradient(135deg,#b45309,#f59e0b);}
+        .kpi-dr{background:linear-gradient(135deg,#6d28d9,#8b5cf6);}
+        .kpi-pa{background:linear-gradient(135deg,#0e7490,#06b6d4);}
+        .section-title{color:var(--blue);font-size:14px;font-weight:700;border-bottom:2px solid #e9ecef;padding-bottom:8px;margin:22px 0 12px;text-transform:uppercase;letter-spacing:0.5px;}
+        .charts-row{display:grid;grid-template-columns:1fr 2fr;gap:14px;margin-bottom:14px;}
+        .charts-row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:14px;}
+        .load-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;}
+        .chart-box{background:white;padding:16px;border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow);}
+        .chart-box canvas{max-height:250px;}
+        .chart-label{font-weight:700;font-size:13px;color:var(--blue);margin-bottom:8px;}
+        .ctrl{margin-bottom:10px;}
+        .ctrl select{width:100%;padding:8px;border-radius:5px;border:1px solid var(--border);font-size:13px;}
+        .badge-row{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;}
+        .badge{display:inline-flex;align-items:center;gap:4px;padding:4px 9px;border-radius:20px;font-size:12px;font-weight:600;border:1px solid;}
+        .b-est{background:var(--blue-lt);border-color:#aac4e8;color:var(--blue);}
+        .b-db{background:var(--amber-lt);border-color:#fcd34d;color:var(--amber);}
+        .b-nlp{background:var(--green-lt);border-color:#6ee7b7;color:var(--green);}
+        .b-onnx{background:var(--gray-lt);border-color:#adb5bd;color:var(--gray);}
+        .b-rules{background:var(--purple-lt);border-color:#c4b5f4;color:var(--purple);}
+        .b-solar{background:#fffbeb;border-color:#fcd34d;color:#92400e;}
+        .b-score{background:var(--teal-lt);border-color:#67e8f9;color:var(--teal);}
+        .b-pa{background:var(--teal-lt);border-color:#67e8f9;color:var(--teal);font-weight:700;}
+        .b-pb{background:var(--blue-lt);border-color:#93c5fd;color:var(--blue);font-weight:700;}
+        .b-pc{background:var(--amber-lt);border-color:#fcd34d;color:var(--amber);font-weight:700;}
+        .b-pd{background:var(--red-lt);border-color:#fca5a5;color:var(--red);font-weight:700;}
+        .dr-bar{margin-top:7px;background:#e9ecef;border-radius:20px;height:9px;overflow:hidden;}
+        .dr-fill{height:100%;border-radius:20px;background:linear-gradient(90deg,#0e7490,#06b6d4);transition:width 0.4s;}
+        .pf{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center;}
+        .pf select,.pf input{padding:7px 10px;border:1px solid var(--border);border-radius:5px;font-size:13px;}
+        .pf label{font-weight:600;font-size:13px;color:var(--blue);}
+        .tc{max-height:440px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius);}
+        table{width:100%;border-collapse:collapse;font-size:12px;background:white;}
+        thead{position:sticky;top:0;z-index:5;}
+        th{color:white;padding:9px 7px;text-align:center;font-weight:600;}
+        td{border:1px solid #e9ecef;padding:7px;text-align:center;}
+        tr:nth-child(even){background:#f8f9fa;}
+        tr:hover{background:#e8f0fb;}
+        .sbar{display:inline-block;width:48px;height:7px;background:#e9ecef;border-radius:4px;vertical-align:middle;margin-left:4px;overflow:hidden;}
+        .sfill{height:100%;border-radius:4px;background:linear-gradient(90deg,#0e7490,#6d28d9);}
+        .export-bar{text-align:center;margin:10px 0 14px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap;}
+        .btn-exp{padding:12px 26px;background:var(--green);color:white;border:none;border-radius:6px;cursor:pointer;font-size:14px;font-weight:700;transition:0.2s;}
+        .btn-exp:hover{background:#155f3a;}
+        .btn-exp2{padding:12px 26px;background:var(--teal);color:white;border:none;border-radius:6px;cursor:pointer;font-size:14px;font-weight:700;transition:0.2s;}
+        .btn-exp2:hover{background:#0a5c72;}
+        #loadingOverlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(255,255,255,0.92);display:none;flex-direction:column;align-items:center;justify-content:center;z-index:9999;}
+        .spinner{border:7px solid #e9ecef;border-top:7px solid var(--blue);border-radius:50%;width:60px;height:60px;animation:spin 0.9s linear infinite;margin-bottom:16px;}
+        @keyframes spin{to{transform:rotate(360deg);}}
+        #loadingMsg{font-size:18px;color:var(--blue);font-weight:700;}
+        #loadingSub{font-size:13px;color:#666;margin-top:6px;}
+        @media(max-width:900px){.setup-section,.charts-row,.charts-row3,.load-row{grid-template-columns:1fr;}}
     </style>
 </head>
 <body>
-
 <div id="loadingOverlay">
     <div class="spinner"></div>
-    <div id="loadingMessage">Đang xử lý dữ liệu...</div>
-    <div id="loadingSubMessage">Quá trình này có thể mất vài giây với dữ liệu lớn, vui lòng đợi!</div>
+    <div id="loadingMsg">Đang xử lý...</div>
+    <div id="loadingSub">Vui lòng đợi</div>
 </div>
-
 <div class="container">
-    <h2>Hệ thống Phân tích Điều chỉnh Phụ tải (DR) 2026</h2>
-    
+    <div class="header">
+        <h1>🔌 Hệ thống Phân tích Điều chỉnh & Nhận dạng Tín hiệu Dịch chuyển Phụ tải — EVNSPC 2026</h1>
+        <div class="sub">Phân loại Khách hàng · Tín hiệu Kỹ thuật Dịch chuyển · Danh sách Khảo sát · Xuất Báo cáo</div>
+    </div>
     <div class="setup-section">
-        <!-- Đã thêm thuộc tính 'multiple' để cho phép chọn cả 2 file cùng lúc -->
         <div class="upload-box" onclick="document.getElementById('fileInput').click()">
-            <p style="font-size: 20px; color: #004a99; margin-bottom: 10px;"><b>📁 Tải lên file Dữ liệu 24h & Danh mục KH</b></p>
-            <p style="font-size: 14px; color: #666; margin-top: 0;">(Có thể bôi đen chọn nhiều file .csv, .xlsx cùng lúc)</p>
-            <p id="fileNameDisplay" style="font-weight: bold; color: #28a745; margin-top: 10px;"></p>
-            <input type="file" id="fileInput" accept=".xlsx, .xls, .csv" multiple style="display:none">
+            <p style="font-size:17px;color:var(--blue);margin:0 0 6px;font-weight:700;">📁 Tải lên File Dữ liệu</p>
+            <p style="color:#666;margin:0 0 8px;font-size:13px;">File 24h (.xlsx/.csv) + File Danh mục ngành nghề<br>Có thể chọn nhiều file cùng lúc</p>
+            <p id="fileNameDisplay" style="font-weight:700;color:#1a7a4a;margin:0;font-size:13px;"></p>
+            <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" multiple style="display:none">
         </div>
-
         <div class="config-box">
             <h3>⚙️ Cấu hình Tham số Phân tích</h3>
             <div class="param-grid">
                 <div class="param-item">
-                    <label>Giờ Điều chỉnh (Từ - Đến):</label>
-                    <div style="display: flex; gap: 5px;">
-                        <select id="timeStart" style="flex: 1;"></select>
-                        <select id="timeEnd" style="flex: 1;"></select>
+                    <label>Khung giờ cần khảo sát (Từ → Đến):</label>
+                    <div style="display:flex;gap:5px;">
+                        <select id="timeStart" style="flex:1;"></select>
+                        <select id="timeEnd" style="flex:1;"></select>
                     </div>
                 </div>
-                <div class="param-item">
-                    <label>Ngày HĐ tương đương/năm:</label>
-                    <input type="number" id="activeDays" value="296" min="1" max="365">
-                </div>
-                <div class="param-item">
-                    <label>Ngưỡng CV Trần (%):</label>
-                    <input type="number" id="cvThreshold" value="15" min="1" max="100">
-                </div>
-                <div class="param-item">
-                    <label>Ngưỡng SD Thấp tại đỉnh (%):</label>
-                    <input type="number" id="lowThreshold" value="20" min="1" max="100">
-                </div>
+                <div class="param-item"><label>Ngày HĐ tương đương/năm:</label><input type="number" id="activeDays" value="296" min="1" max="365"></div>
+                <div class="param-item"><label>Ngưỡng CV Phẳng (%):</label><input type="number" id="cvThreshold" value="15" min="1" max="100"></div>
+                <div class="param-item"><label>Ngưỡng SD Thấp tại đỉnh (%):</label><input type="number" id="lowThreshold" value="20" min="1" max="100"></div>
             </div>
-            <button class="btn-execute" id="btnExecute" onclick="triggerAnalysis()" disabled>🚀 THỰC THI PHÂN TÍCH</button>
+            <button class="btn-execute" id="btnExecute" onclick="triggerAnalysis()" disabled>🚀 PHÂN TÍCH & NHẬN DẠNG TÍN HIỆU DịCH CHUYểN</button>
         </div>
     </div>
 
     <div id="results" style="display:none">
-        <div class="summary-grid">
-            <div class="card total">TỔNG SỐ KHÁCH HÀNG<br><span id="s-total" style="font-size: 28px;">0</span></div>
-            <div class="card ok">1. ĐÁP ỨNG THAM GIA<br><span id="s-ok" style="font-size: 28px;">0</span></div>
-            <div class="card flat">2.1. PHỤ TẢI PHẲNG<br><span id="s-flat" style="font-size: 28px;">0</span></div>
-            <div class="card low">2.2. SỬ DỤNG THẤP<br><span id="s-low" style="font-size: 28px;">0</span></div>
-            <div class="card solar">DỰ BÁO CÓ ĐMTMN<br><span id="s-solar" style="font-size: 28px;">0</span></div>
+        <div class="kpi-grid">
+            <div class="kpi kpi-total">TỔNG KH<span class="kv" id="s-total">0</span></div>
+            <div class="kpi kpi-ok">1. ĐÁP ỨNG<span class="kv" id="s-ok">0</span></div>
+            <div class="kpi kpi-flat">2.1. PHẲNG<span class="kv" id="s-flat">0</span></div>
+            <div class="kpi kpi-low">2.2. THẤP<span class="kv" id="s-low">0</span></div>
+            <div class="kpi kpi-solar">ĐMTMN<span class="kv" id="s-solar">0</span></div>
+            <div class="kpi kpi-dr">BIÊN ĐỘ ĐỈnh-NềN<span class="kv" id="s-dr-mw">0 MW</span><span class="ks">Tổng biên độ đỉnh-nền toàn bộ KH</span></div>
+            <div class="kpi kpi-pa">NHÓM A<span class="kv" id="s-pa">0</span><span class="ks">KH đáng khảo sát trực tiếp</span></div>
         </div>
 
-        <div style="text-align: center;">
-            <button class="btn-export" id="btnExport" onclick="exportExcel()">⬇ TẢI XUỐNG BÁO CÁO EXCEL ĐÃ PHÂN LOẠI</button>
+        <div class="export-bar" id="exportBar" style="display:none">
+            <button class="btn-exp" onclick="exportExcel()">⬇ Xuất Excel Toàn bộ</button>
+            <button class="btn-exp2" onclick="exportPriorityExcel()">⬇ Xuất Danh sách Khảo sát Nhóm A+B</button>
         </div>
 
-        <h3 class="section-title">I. TỔNG QUAN CƠ CẤU KHÁCH HÀNG</h3>
-        <div class="charts-container">
+        <div class="section-title">I. Tổng quan Cơ cấu Khách hàng</div>
+        <div class="charts-row">
             <div class="chart-box"><canvas id="pieChart"></canvas></div>
             <div class="chart-box"><canvas id="barChart"></canvas></div>
         </div>
 
-        <h3 class="section-title">II. PHÂN TÍCH ĐƯỜNG CONG PHỤ TẢI 24 GIỜ</h3>
-        <div class="line-charts-container">
+        <div class="section-title">II. Phân tích Tín hiệu Kỹ thuật Dịch chuyển Phụ tải</div>
+        <div class="charts-row3">
+            <div class="chart-box"><div class="chart-label">Biên độ đỉnh-nền (MW) theo Công ty ĐL</div><canvas id="drChart"></canvas></div>
+            <div class="chart-box"><div class="chart-label">Phân bổ Nhóm Tín hiệu Kỹ thuật</div><canvas id="prioChart"></canvas></div>
+            <div class="chart-box"><div class="chart-label">Ngành nghề — Biên độ đỉnh-nền cao nhất</div><canvas id="indChart"></canvas></div>
+        </div>
+
+        <div class="section-title">III. Phân tích Đường cong Phụ tải 24 giờ</div>
+        <div class="load-row">
             <div class="chart-box">
-                <div class="control-group">
-                    <label style="font-weight: bold; font-size: 14px; color: #333;">Chọn Khách hàng cụ thể:</label>
-                    <select id="customerSelect" onchange="drawCustomerLineChart()"></select>
-                    <div>
-                        <div class="est-badge">
-                            ⚡ Dự báo tiêu thụ: <span id="customerAnnualEst" style="color: #dc3545;">0</span> kWh/năm 
-                            <span id="customerVolGroup" style="font-weight: normal; color: #333; font-style: italic;"></span>
-                        </div>
-                        <div class="industry-badge" id="industryBadge">
-                            <span id="aiIcon">🏭</span> Ngành nghề: <span id="customerIndustry" style="color: #004a99; font-weight: 800;">-</span>
-                        </div>
-                        <div class="solar-badge" id="solarBadge">☀️ Nghi ngờ có ĐMTMN</div>
-                    </div>
+                <div class="ctrl">
+                    <label style="font-weight:700;font-size:13px;">Chọn Khách hàng:</label>
+                    <select id="customerSelect" onchange="drawCustomerChart()"></select>
+                    <div class="badge-row" id="custBadges"></div>
+                    <div class="dr-bar" id="drBar" style="display:none"><div class="dr-fill" id="drFill"></div></div>
                 </div>
-                <canvas id="customerLineChart"></canvas>
+                <canvas id="custChart"></canvas>
             </div>
             <div class="chart-box">
-                <div class="control-group">
-                    <label style="font-weight: bold; font-size: 14px; color: #333;">Chọn Công ty Điện lực:</label>
-                    <select id="companySelect" onchange="drawGroupLineChart()"></select>
+                <div class="ctrl">
+                    <label style="font-weight:700;font-size:13px;">Chọn Công ty Điện lực:</label>
+                    <select id="companySelect" onchange="drawGroupChart()"></select>
                 </div>
-                <canvas id="groupLineChart"></canvas>
+                <canvas id="groupChart"></canvas>
             </div>
         </div>
 
-        <h3 class="section-title">III. BÁO CÁO CHI TIẾT THEO ĐƠN VỊ & SẢN LƯỢNG</h3>
-        <div class="table-container">
-            <table id="tblUnit">
+        <div class="section-title">IV. Danh sách Khảo sát — Nhóm có Tín hiệu Kỹ thuật Đáng chú ý</div>
+        <div class="pf">
+            <label>Lọc:</label>
+            <select id="filterP" onchange="renderPrioTable()">
+                <option value="ALL">Tất cả nhóm</option>
+                <option value="A">A — Đáng khảo sát trực tiếp</option>
+                <option value="B">B — Tìm hiểu thêm</option>
+                <option value="C">C — Theo dõi</option>
+                <option value="D">D — Tín hiệu yếu</option>
+            </select>
+            <select id="filterC2" onchange="renderPrioTable()"><option value="ALL">Tất cả Công ty ĐL</option></select>
+            <input type="text" id="searchKH" placeholder="🔍 Tìm tên KH..." oninput="renderPrioTable()" style="min-width:200px;">
+            <span id="prioCount" style="font-size:12px;color:#666;"></span>
+        </div>
+        <div class="tc">
+            <table>
                 <thead>
                     <tr>
-                        <th rowspan="2" style="background-color: #004a99; vertical-align: middle;">Đơn vị (Công ty Điện lực)</th>
-                        <th colspan="4" style="background-color: #0056b3;">Phân loại Điều chỉnh Phụ tải (DR)</th>
-                        <th colspan="4" style="background-color: #17a2b8;">Phân loại theo SL Dự báo (kWh/năm)</th>
-                        <th rowspan="2" style="background-color: #d39e00; vertical-align: middle;">Dự báo có ĐMTMN<br>(KH)</th>
-                    </tr>
-                    <tr>
-                        <th style="background-color: #004a99;">1. Đáp ứng</th>
-                        <th style="background-color: #004a99;">2.1. Phẳng</th>
-                        <th style="background-color: #004a99;">2.2. Thấp</th>
-                        <th style="background-color: #004a99;">Tổng</th>
-                        <th style="background-color: #138496;">&ge; 1 Triệu</th>
-                        <th style="background-color: #138496;">500k - &lt;1Tr</th>
-                        <th style="background-color: #138496;">200k - &lt;500k</th>
-                        <th style="background-color: #138496;">&lt; 200k</th>
+                        <th style="background:var(--blue);">#</th>
+                        <th style="background:var(--blue);text-align:left;min-width:200px;">Tên Khách hàng</th>
+                        <th style="background:var(--blue);">Công ty ĐL</th>
+                        <th style="background:var(--blue);">Nhóm phân loại</th>
+                        <th style="background:var(--purple);">Ưu tiên</th>
+                        <th style="background:var(--purple);">Điểm tín hiệu</th>
+                        <th style="background:var(--teal);">Biên độ đỉnh-nền (kW)</th>
+                        <th style="background:var(--teal);">Linh hoạt (%)</th>
+                        <th style="background:var(--green);">SL Năm (MWh)</th>
+                        <th style="background:var(--blue);">Ngành nghề</th>
+                        <th style="background:var(--amber);">ĐMTMN</th>
                     </tr>
                 </thead>
-                <tbody></tbody>
+                <tbody id="prioTbody"></tbody>
+            </table>
+        </div>
+
+        <div class="section-title">V. Báo cáo Tổng hợp theo Đơn vị & Sản lượng</div>
+        <div class="tc">
+            <table>
+                <thead>
+                    <tr>
+                        <th rowspan="2" style="background:var(--blue);vertical-align:middle;text-align:left;min-width:180px;">Công ty Điện lực</th>
+                        <th colspan="4" style="background:#0056b3;">Phân loại Điều chỉnh phụ tải</th>
+                        <th colspan="4" style="background:var(--teal);">Phân loại Sản lượng (kWh/năm)</th>
+                        <th colspan="3" style="background:var(--purple);">Tín hiệu Dịch chuyển</th>
+                        <th rowspan="2" style="background:var(--amber);vertical-align:middle;">ĐMTMN</th>
+                    </tr>
+                    <tr>
+                        <th style="background:#0056b3;">1.Đáp ứng</th><th style="background:#0056b3;">2.1.Phẳng</th>
+                        <th style="background:#0056b3;">2.2.Thấp</th><th style="background:#0056b3;">Tổng</th>
+                        <th style="background:var(--teal);">≥1 Triệu</th><th style="background:var(--teal);">500k–1Tr</th>
+                        <th style="background:var(--teal);">200k–500k</th><th style="background:var(--teal);">&lt;200k</th>
+                        <th style="background:var(--purple);">KH nhóm A (đáng khảo sát)</th>
+                        <th style="background:var(--purple);">Biên độ đỉnh-nền (MW)</th>
+                        <th style="background:var(--purple);">Flex TB(%)</th>
+                    </tr>
+                </thead>
+                <tbody id="unitTbody"></tbody>
             </table>
         </div>
     </div>
 </div>
 
 <script>
-    let rawData24h = []; // Chứa dữ liệu 24h
-    let referenceDatabase = {}; // Map lưu trữ: { "Mã KH": "Đặc điểm ngành nghề" }
-    let finalData = [];
-    
-    let myPieChart = null, myBarChart = null, myCustomerChart = null, myGroupChart = null;
-    const TIME_LABELS = ["00:00","01:00","02:00","03:00","04:00","05:00","06:00","07:00","08:00","09:00","10:00","11:00","12:00","13:00","14:00","15:00","16:00","17:00","18:00","19:00","20:00","21:00","22:00","23:00"];
+let rawData24h=[],referenceDatabase={},finalData=[];
+let myPie,myBar,myCust,myGrp,myDr,myPrio,myInd;
+const TL=Array.from({length:24},(_,i)=>String(i).padStart(2,'0')+':00');
 
-    // ==========================================
-    // MODULE NLP: DỰ BÁO QUA TÊN KHÁCH HÀNG
-    // ==========================================
-    function removeVietnameseTones(str) {
-        str = str.replace(/à|á|ạ|ả|ã|â|ầ|ấ|ậ|ẩ|ẫ|ă|ằ|ắ|ặ|ẳ|ẵ/g, "a");
-        str = str.replace(/è|é|ẹ|ẻ|ẽ|ê|ề|ế|ệ|ể|ễ/g, "e");
-        str = str.replace(/ì|í|ị|ỉ|ĩ/g, "i");
-        str = str.replace(/ò|ó|ọ|ỏ|õ|ô|ồ|ố|ộ|ổ|ỗ|ơ|ờ|ớ|ợ|ở|ỡ/g, "o");
-        str = str.replace(/ù|ú|ụ|ủ|ũ|ư|ừ|ứ|ự|ử|ữ/g, "u");
-        str = str.replace(/ỳ|ý|ỵ|ỷ|ỹ/g, "y");
-        str = str.replace(/đ/g, "d");
-        str = str.replace(/À|Á|Ạ|Ả|Ã|Â|Ầ|Ấ|Ậ|Ẩ|Ẫ|Ă|Ằ|Ắ|Ặ|Ẳ|Ẵ/g, "A");
-        str = str.replace(/È|É|Ẹ|Ẻ|Ẽ|Ê|Ề|Ế|Ệ|Ể|Ễ/g, "E");
-        str = str.replace(/Ì|Í|Ị|Ỉ|Ĩ/g, "I");
-        str = str.replace(/Ò|Ó|Ọ|Ỏ|Õ|Ô|Ồ|Ố|Ộ|Ổ|Ỗ|Ơ|Ờ|Ớ|Ợ|Ở|Ỡ/g, "O");
-        str = str.replace(/Ù|Ú|Ụ|Ủ|Ũ|Ư|Ừ|Ứ|Ự|Ử|Ữ/g, "U");
-        str = str.replace(/Ỳ|Ý|Ỵ|Ỷ|Ỹ/g, "Y");
-        str = str.replace(/Đ/g, "D");
-        return str.toLowerCase().trim();
-    }
+function showLoading(m,s='Vui lòng đợi...'){
+    document.getElementById('loadingMsg').innerText=m;
+    document.getElementById('loadingSub').innerText=s;
+    document.getElementById('loadingOverlay').style.display='flex';
+}
+function hideLoading(){document.getElementById('loadingOverlay').style.display='none';}
 
-    function predictIndustryByNLP(customerName) {
-        if (!customerName) return null;
-        let cleanName = removeVietnameseTones(customerName);
+function rmTones(s){
+    const m=[[/[àáạảãâầấậẩẫăằắặẳẵ]/g,'a'],[/[èéẹẻẽêềếệểễ]/g,'e'],[/[ìíịỉĩ]/g,'i'],
+        [/[òóọỏõôồốộổỗơờớợởỡ]/g,'o'],[/[ùúụủũưừứựửữ]/g,'u'],[/[ỳýỵỷỹ]/g,'y'],[/đ/g,'d'],
+        [/[ÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴ]/g,'A'],[/[ÈÉẸẺẼÊỀẾỆỂỄ]/g,'E'],[/[ÌÍỊỈĨ]/g,'I'],
+        [/[ÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠ]/g,'O'],[/[ÙÚỤỦŨƯỪỨỰỬỮ]/g,'U'],[/[ỲÝỴỶỸ]/g,'Y'],[/Đ/g,'D']];
+    m.forEach(([r,v])=>s=s.replace(r,v));
+    return s.toLowerCase().trim();
+}
 
-        // Danh sách từ khóa được mở rộng từ dữ liệu thực tế EVNSPC
-        // Thứ tự ưu tiên từ trên xuống: ngành đặc thù trước, chung sau
-        const rules = [
-            // --- Nhóm Thủy sản ---
-            { keywords: ["thuy san", "hai san", "ca tra", "ca basa", "ca moi", "tom", "tom cang", "tom su", "seafood", "ca sau", "nuoc man"], label: "Chế biến thủy sản" },
-            // --- Nhóm Nước đá ---
-            { keywords: ["nuoc da", "sx nuoc da", "san xuat nuoc da", "nuoc giai khat", "bia ", "nuoc uong", "dong lanh"], label: "Sản xuất nước đá" },
-            // --- Nhóm Xay xát - Lúa gạo ---
-            { keywords: ["xay xat", "lau bong", "bong gao", "kho lua", "say lua", "che bien gao", "xuat khau gao", "luong thuc"], label: "Xay xát - Lau bóng gạo" },
-            // --- Nhóm Khai thác - Vật liệu xây dựng ---
-            { keywords: ["khai thac da", "da granite", "da xay dung", "xi mang", "ximang", "vat lieu xay dung", "gach ngoi", "gach ceramic", "gach men", "cat xay"], label: "Khai thác đá / Vật liệu xây dựng" },
-            // --- Nhóm Chế biến gỗ ---
-            { keywords: ["che bien go", "go ", "go xuat khau", "do go", "san go", "vat lieu go", "may tre", "long nhon"], label: "Chế biến gỗ" },
-            // --- Nhóm Cao su / Nhựa ---
-            { keywords: ["cao su", "nhua", "bao bi", "plastic", "rubber", "san xuat nhua", "composite", "pvc", "nhua pp", "nhua pe"], label: "Sản xuất các sản phẩm từ cao su và nhựa các loại" },
-            // --- Nhóm May mặc / Dệt nhuộm ---
-            { keywords: ["det", "may mac", "may xuat khau", "garment", "vai", "soi", "nhuom", "len xuat khau", "trang phuc", "ao quan", "bao bi det"], label: "May mặc / Dệt nhuộm" },
-            // --- Nhóm Da giày / Túi xách ---
-            { keywords: ["giay dep", "da giay", "tui xach", "vali", "yem dep", "shoes", "leather", "da thuc vat", "balo", "tui tay"], label: "Da giày / Túi xách" },
-            // --- Nhóm Cơ khí / Kim loại ---
-            { keywords: ["co khi", "sat thep", "thep xay dung", "thep tam", "kim loai", "nhom", "dong thau", "ton ", "ren ", "duc ", "han "], label: "Cơ khí / Kim loại" },
-            // --- Nhóm Nông nghiệp / Chăn nuôi ---
-            { keywords: ["chan nuoi", "trai ga", "trai heo", "trai vit", "nuoi trong", "thuy canh", "trong trot", "nong trai", "bom tuoi", "tuoi tieu"], label: "Chăn nuôi / Nông nghiệp" },
-            // --- Nhóm Chế biến hạt / Nông sản ---
-            { keywords: ["hat dieu", "dieu rang", "hat co", "ca phe", "hat tieu", "tiem ga", "tiem rang", "che bien nong san", "rau qua", "thuc pham nong san"], label: "Chế biến thực phẩm & Nông sản" },
-            // --- Nhóm Thực phẩm chung ---
-            { keywords: ["thuc pham", "thit ", "sua ", "banh ", "kem ", "mi ", "pho ", "che bien tp", "do uong"], label: "Chế biến thực phẩm" },
-            // --- Nhóm Giấy / Bao bì ---
-            { keywords: ["giay ", "carton", "bao bi giay", "san xuat giay", "nha may giay", "packaging"], label: "Sản xuất giấy và sản phẩm từ giấy" },
-            // --- Nhóm Kho lạnh ---
-            { keywords: ["kho lanh", "kho dong lanh", "lanh", "bao quan lanh"], label: "Kho lạnh / Cấp đông" },
-            // --- Nhóm Hành chính / Văn phòng ---
-            { keywords: ["truong ", "benh vien", "uy ban", "so ", "cuc ", "phong ", "quan ly ha tang", "dich vu hanh chinh"], label: "Hành chính / Văn phòng" },
-        ];
+function nlpPredict(name){
+    if(!name)return null;
+    const n=rmTones(name);
+    const rules=[
+        {kw:['thuy san','hai san','ca tra','ca basa','tom cang','tom su','seafood','nuoc man'],l:'Chế biến thủy sản'},
+        {kw:['nuoc da','sx nuoc da','nuoc giai khat','bia ','nuoc uong','dong lanh'],l:'Sản xuất nước đá'},
+        {kw:['xay xat','lau bong','bong gao','kho lua','say lua','che bien gao','luong thuc'],l:'Xay xát - Lau bóng gạo'},
+        {kw:['khai thac da','xi mang','ximang','vat lieu xay dung','gach ngoi','gach ceramic'],l:'Khai thác đá / Vật liệu XD'},
+        {kw:['che bien go','go xuat khau','do go','san go','vat lieu go'],l:'Chế biến gỗ'},
+        {kw:['cao su','nhua','bao bi','plastic','rubber','composite','pvc'],l:'Sản xuất cao su và nhựa'},
+        {kw:['det ','may mac','may xuat khau','garment','vai ','soi ','nhuom','trang phuc'],l:'May mặc / Dệt nhuộm'},
+        {kw:['giay dep','da giay','tui xach','vali','shoes','leather','balo'],l:'Da giày / Túi xách'},
+        {kw:['co khi','sat thep','thep xay dung','kim loai','nhom ','ton ','ren ','duc '],l:'Cơ khí / Kim loại'},
+        {kw:['chan nuoi','trai ga','trai heo','trai vit','nuoi trong','trong trot','bom tuoi'],l:'Chăn nuôi / Nông nghiệp'},
+        {kw:['hat dieu','ca phe','hat tieu','rau qua','che bien nong san'],l:'Chế biến Nông sản'},
+        {kw:['thuc pham','thit ','sua ','banh ','kem ','mi ','pho '],l:'Chế biến thực phẩm'},
+        {kw:['giay ','carton','bao bi giay','san xuat giay','packaging'],l:'Sản xuất giấy / Bao bì'},
+        {kw:['kho lanh','kho dong lanh','bao quan lanh'],l:'Kho lạnh / Cấp đông'},
+        {kw:['truong ','benh vien','uy ban','hanh chinh'],l:'Hành chính / Dịch vụ'},
+    ];
+    for(const{kw,l}of rules){for(const k of kw){if(n.includes(k))return l;}}
+    return null;
+}
 
-        for (let rule of rules) {
-            for (let kw of rule.keywords) {
-                if (cleanName.includes(kw)) {
-                    return rule.label; 
+document.addEventListener('DOMContentLoaded',()=>{
+    const s=document.getElementById('timeStart'),e=document.getElementById('timeEnd');
+    const html=TL.map((t,i)=>`<option value="${i}">${t}</option>`).join('');
+    s.innerHTML=e.innerHTML=html; s.value='14'; e.value='16';
+});
+
+function readFile(f){return new Promise((res,rej)=>{const r=new FileReader();r.onload=ev=>res(new Uint8Array(ev.target.result));r.onerror=rej;r.readAsArrayBuffer(f);});}
+
+document.getElementById('fileInput').addEventListener('change',async function(e){
+    const files=e.target.files; if(!files||!files.length)return;
+    showLoading('Đang đọc file dữ liệu...','Phân loại và nạp dữ liệu');
+    rawData24h=[]; referenceDatabase={};
+    let names=[];
+    try{
+        for(const file of files){
+            names.push(file.name);
+            const data=await readFile(file);
+            const wb=XLSX.read(data,{type:'array'});
+            const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+            if(!rows.length)continue;
+            const keys=Object.keys(rows[0]);
+            if(keys.includes('00:00')&&(keys.includes('Mã KH')||keys.includes('Mã khách hàng'))){
+                rawData24h=rows;
+            }else if(keys.includes('Đặc điểm phụ tải')){
+                const ik=keys.find(k=>k.includes('Mã'));
+                if(ik)rows.forEach(r=>{if(r[ik]&&r['Đặc điểm phụ tải'])referenceDatabase[String(r[ik]).trim()]=r['Đặc điểm phụ tải'];});
+            }
+        }
+        document.getElementById('fileNameDisplay').innerHTML=`✅ ${names.join(' + ')} — DB: ${Object.keys(referenceDatabase).length} KH`;
+        document.getElementById('btnExecute').disabled=rawData24h.length===0;
+        if(!rawData24h.length)alert('Chưa tìm thấy file dữ liệu 24h!');
+    }catch(err){alert('Lỗi đọc file: '+err.message);}
+    finally{hideLoading();}
+});
+
+function triggerAnalysis(){
+    document.getElementById('btnExecute').disabled=true;
+    showLoading('🤖 Đang phân tích & nhận dạng tín hiệu dịch chuyển...','Hệ thống AI Đa Lớp: Database → NLP → ONNX → Rules');
+    setTimeout(async()=>{
+        await analyze(rawData24h);
+        document.getElementById('btnExecute').disabled=false;
+        hideLoading();
+        document.getElementById('results').scrollIntoView({behavior:'smooth'});
+    },60);
+}
+
+async function analyze(data){
+    const si=+document.getElementById('timeStart').value;
+    const ei=+document.getElementById('timeEnd').value;
+    const cvT=+document.getElementById('cvThreshold').value/100;
+    const lwT=+document.getElementById('lowThreshold').value/100;
+    const ad=+document.getElementById('activeDays').value;
+    const hk=data.length>0?Object.keys(data[0]).slice(-24):[];
+
+    let sess=null;
+    try{
+        ort.env.wasm.wasmPaths='https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/';
+        sess=await ort.InferenceSession.create('model.onnx');
+    }catch(e){console.warn('ONNX:',e.message);}
+
+    const OL=['Sản xuất cao su và nhựa','Chế biến thực phẩm','Sản xuất nước đá','May mặc / Dệt nhuộm',
+        'Xay xát - Lau bóng gạo','Cơ khí / Kim loại','Chế biến thủy sản','Da giày / Túi xách',
+        'Chăn nuôi / Nông nghiệp','Sản xuất giấy / Bao bì','Khai thác đá / Vật liệu XD',
+        'Chế biến gỗ','Kho lạnh / Cấp đông','Sản xuất đồ uống','Chế biến Nông sản','Sản xuất / TM tổng hợp'];
+
+    const out=[];
+    for(const row of data){
+        const gv=(ks)=>{const k=Object.keys(row).find(rk=>ks.some(pk=>rk.toLowerCase().includes(pk)));return k?row[k]:'';}
+        const id=String(gv(['mã kh','mã khách hàng'])||'').trim();
+        const name=gv(['tên kh','khách hàng','tên'])||'KH ẩn danh';
+        const comp=gv(['công ty','điện lực','đơn vị'])||'Đơn vị khác';
+        const loai=gv(['loại phụ tải','loai phu tai'])||'';
+
+        const vals=hk.map(k=>parseFloat(row[k])||0);
+        const maxV=Math.max(...vals);
+        const avgV=vals.reduce((a,b)=>a+b,0)/vals.length;
+        const std=Math.sqrt(vals.reduce((s,v)=>s+Math.pow(v-avgV,2),0)/(vals.length-1));
+        const cv=avgV>0?std/avgV:0;
+        const peakVals=vals.slice(si,ei+1);
+        const peakAvg=peakVals.reduce((a,b)=>a+b,0)/peakVals.length;
+        const annual=vals.reduce((a,b)=>a+b,0)*ad;
+        const vg=annual>=1e6?'1. ≥ 1 Triệu kWh':annual>=5e5?'2. 500k–<1 Triệu':annual>=2e5?'3. 200k–<500k':'4. < 200k kWh';
+
+        // Solar detection (optimized)
+        const mp=Math.max(...vals.slice(6,10)),mm=Math.min(...vals.slice(10,16)),ep=Math.max(...vals.slice(16,20));
+        const nb=(vals.slice(0,5).reduce((a,b)=>a+b,0)+vals[22]+vals[23])/7;
+        const sol=maxV>30&&mp>1.5*mm&&ep>1.5*mm&&mm<0.4*maxV&&nb<0.6*mp;
+
+        // AI 3 layers
+        let ind='Chưa xác định',meth='';
+        if(id&&referenceDatabase[id]){ind=referenceDatabase[id];meth='DATABASE';}
+        else{
+            const nlp=nlpPredict(name);
+            if(nlp){ind=nlp;meth='NLP';}
+            else if(maxV>0){
+                if(sess){
+                    try{
+                        const norm=vals.map(v=>v/maxV);
+                        const res=await sess.run({[sess.inputNames[0]]:new ort.Tensor('float32',new Float32Array(norm),[1,24])});
+                        const raw=res[sess.outputNames[0]].data[0];
+                        ind=(typeof raw==='number'||typeof raw==='bigint')?(OL[Number(raw)]??`Nhóm ${raw}`):String(raw);
+                        meth='ONNX';
+                    }catch(err){sess=null;}
+                }
+                if(!sess||meth!=='ONNX'){
+                    const nr=avgV>0?nb/avgV:0;
+                    const dr2=avgV>0?(vals.slice(8,17).reduce((a,b)=>a+b,0)/9)/avgV:0;
+                    const er=avgV>0?(vals.slice(17,22).reduce((a,b)=>a+b,0)/5)/avgV:0;
+                    if(cv>0.90&&nr>0.85)ind='Xay xát - Lau bóng gạo';
+                    else if(cv>0.90&&dr2>1.40)ind='Khai thác đá / Vật liệu XD';
+                    else if(nr>1.30&&er<0.70)ind='Sản xuất đồ uống';
+                    else if(nr>1.10&&dr2<1.05&&er<0.80)ind='Sản xuất nước đá';
+                    else if(nr<0.50&&dr2>1.50)ind='Da giày / Túi xách';
+                    else if(nr<0.65&&dr2>1.40&&er<0.80)ind='Khai thác đá / Vật liệu XD';
+                    else if(nr<0.65&&dr2>1.30)ind='Cơ khí / Kim loại';
+                    else if(cv<0.22)ind='Chăn nuôi / Nông nghiệp';
+                    else if(cv<0.32&&nr>0.78&&dr2>1.15)ind='Sản xuất cao su và nhựa';
+                    else if(cv>0.55&&nr>0.75&&dr2>1.20)ind='Cơ khí / Kim loại';
+                    else if(cv>0.40&&dr2>1.15&&er>0.95)ind='Chế biến thủy sản';
+                    else if(cv>0.35&&dr2>1.20&&er<0.92)ind='Chế biến thực phẩm';
+                    else if(cv<0.40&&nr>0.82&&er>0.98)ind='May mặc / Dệt nhuộm';
+                    else if(nr>1.00&&dr2>1.00&&cv>0.45)ind='Xay xát - Lau bóng gạo';
+                    else if(cv<0.35&&dr2>1.10)ind='Sản xuất giấy / Bao bì';
+                    else ind='Sản xuất / TM tổng hợp';
+                    meth='RULES';
                 }
             }
         }
-        return null; 
-    }
 
-    // ==========================================
-    // GIAO DIỆN VÀ ĐỌC FILE
-    // ==========================================
-    function showLoading(message) {
-        document.getElementById('loadingMessage').innerText = message;
-        document.getElementById('loadingOverlay').style.display = 'flex';
-    }
-    function hideLoading() {
-        document.getElementById('loadingOverlay').style.display = 'none';
-    }
+        // DR classification
+        let cat='1. Có tín hiệu dao động tải rõ',rsn='';
+        if(maxV===0){cat='2.2. Tải rất thấp hoặc bằng phẳng ở khung giờ khảo sát';rsn='Không sử dụng điện.';}
+        else if(peakAvg<lwT*maxV){cat='2.2. Tải rất thấp hoặc bằng phẳng ở khung giờ khảo sát';rsn=`CS tại khung giờ khảo sát (${peakAvg.toFixed(0)} kW) < ${(lwT*100).toFixed(0)}% Max.`;}
+        else if(cv<cvT){cat='2.1. Phụ tải chạy đều — ít biến động';rsn=`CV=${(cv*100).toFixed(1)}% < ngưỡng phẳng. Phụ tải ổn định, khó dịch chuyển mà không ảnh hưởng vận hành.`;}
+        else{rsn=`CV=${(cv*100).toFixed(1)}%, CS đỉnh=${peakAvg.toFixed(0)} kW.`;}
+        if(sol)rsn+=' [Nghi ngờ ĐMTMN].';
 
-    document.addEventListener('DOMContentLoaded', function() {
-        const startSel = document.getElementById('timeStart');
-        const endSel = document.getElementById('timeEnd');
-        if(startSel && endSel) {
-            let optionsHtml = '';
-            TIME_LABELS.forEach((t, index) => { optionsHtml += `<option value="${index}">${t}</option>`; });
-            startSel.innerHTML = optionsHtml; endSel.innerHTML = optionsHtml;
-            startSel.value = "14"; endSel.value = "16";
-        }
+        // Biên độ đỉnh-nền = peakAvg - baseline (chênh lệch CS khung giờ khảo sát so với ngoài giờ)
+        const blArr=vals.slice(0,si).concat(vals.slice(ei+1));
+        const bl=blArr.length>0?blArr.reduce((a,b)=>a+b,0)/blArr.length:0;
+        const drPotKw=Math.max(0,peakAvg-bl);
+        const flexPct=maxV>0?(drPotKw/maxV*100):0;
+
+        // Điểm tín hiệu kỹ thuật (0–100) — chỉ phản ánh đặc điểm đường cong, không kết luận khả năng dịch chuyển
+        const fs=Math.min(flexPct/50,1)*40;
+        const ss=Math.min(annual/1e6,1)*30;
+        const gs=cat.startsWith('1.')?20:cat.startsWith('2.1')?10:0;
+        const slS=sol?10:0;
+        const score=Math.round(fs+ss+gs+slS);
+
+        // Priority
+        let pri='D';
+        if(score>=50&&annual>=5e5)pri='A';
+        else if(score>=30&&annual>=2e5)pri='B';
+        else if(score>=15)pri='C';
+
+        const priLabel={A:'A — Đáng khảo sát trực tiếp',B:'B — Tìm hiểu thêm',C:'C — Theo dõi',D:'D — Tín hiệu yếu'}[pri];
+        const methLabel={DATABASE:'🗄️ Dữ liệu gốc',NLP:'🔍 Tên KH',ONNX:'🤖 AI ONNX',RULES:'📊 Rules'}[meth]||'';
+
+        out.push({
+            _vals:vals,_annual:annual,_vg:vg,_sol:sol,_ind:ind,_meth:meth,
+            _score:score,_pri:pri,_drKw:drPotKw,_flex:flexPct,
+            'Công ty ĐL':comp,'Mã KH':id,'Tên KH':name,'Loại Phụ Tải':loai,
+            'Nhóm Tín hiệu Kỹ thuật':priLabel,'Điểm Tín hiệu (0-100)':score,
+            'Biên độ Đỉnh-Nền (kW)':Math.round(drPotKw),'Mức dao động tải đỉnh (%)':flexPct.toFixed(1),
+            'Công suất Max (kW)':maxV.toFixed(1),'CS TB Khung giờ khảo sát (kW)':peakAvg.toFixed(1),
+            'CV (%)': (cv*100).toFixed(1)+'%','Dự báo SL Năm (kWh)':Math.round(annual),
+            'Nhóm Sản lượng':vg,'Dự báo Ngành Nghề':ind,'PP Nhận diện':methLabel,
+            'Dự báo ĐMTMN':sol?'Có (Duck Curve)':'Không rõ',
+            'Kết quả Phân loại':cat,'Diễn giải (tín hiệu kỹ thuật — cần xác nhận qua thương lượng)':rsn,
+        });
+    }
+    finalData=out;
+    updateKPIs(); renderAllCharts(); populateDropdowns();
+}
+
+function updateKPIs(){
+    let tot=0,ok=0,flat=0,low=0,sol=0,drMw=0,pa=0;
+    finalData.forEach(d=>{
+        tot++;
+        if(d['Kết quả Phân loại'].startsWith('1.'))ok++;
+        else if(d['Kết quả Phân loại'].startsWith('2.1'))flat++;
+        else low++;
+        if(d._sol)sol++;
+        drMw+=d._drKw;
+        if(d._pri==='A')pa++;
     });
+    document.getElementById('s-total').innerText=tot;
+    document.getElementById('s-ok').innerText=ok;
+    document.getElementById('s-flat').innerText=flat;
+    document.getElementById('s-low').innerText=low;
+    document.getElementById('s-solar').innerText=sol;
+    document.getElementById('s-dr-mw').innerText=(drMw/1000).toFixed(1)+' MW';
+    document.getElementById('s-pa').innerText=pa;
+    document.getElementById('results').style.display='block';
+    document.getElementById('exportBar').style.display='flex';
+}
 
-    // Hàm đọc file dạng Promise để xử lý bất đồng bộ nhiều file
-    function readFileAsArrayBuffer(file) {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = e => resolve(new Uint8Array(e.target.result));
-            reader.onerror = e => reject(e);
-            reader.readAsArrayBuffer(file);
-        });
-    }
+function renderAllCharts(){
+    renderOvCharts(); renderDrChart(); renderPrioChart(); renderIndChart();
+    renderPrioTable(); renderUnitTable();
+}
 
-    document.getElementById('fileInput').addEventListener('change', async function(e) {
-        const files = e.target.files;
-        if (!files || files.length === 0) return;
-        showLoading("Đang đọc và phân loại các file dữ liệu...");
-        
-        let fileNames = [];
-        rawData24h = [];
-        referenceDatabase = {}; // Reset lại database cũ
+function renderOvCharts(){
+    const ok=finalData.filter(d=>d['Kết quả Phân loại'].startsWith('1.')).length;
+    const fl=finalData.filter(d=>d['Kết quả Phân loại'].startsWith('2.1')).length;
+    const lw=finalData.filter(d=>d['Kết quả Phân loại'].startsWith('2.2')).length;
+    if(myPie)myPie.destroy();
+    myPie=new Chart(document.getElementById('pieChart'),{type:'doughnut',data:{labels:['Tín hiệu rõ (1)','Phụ tải đều (2.1)','Tải thấp (2.2)'],datasets:[{data:[ok,fl,lw],backgroundColor:['#1a7a4a','#d97706','#c0392b']}]},options:{plugins:{legend:{position:'bottom'},title:{display:true,text:'Cơ cấu Phân loại Điều chỉnh Phụ tải'}}}});
+    const um={};
+    finalData.forEach(d=>{const u=d['Công ty ĐL'].replace('CÔNG TY ĐIỆN LỰC','PC').replace('Công ty Điện lực','PC');if(!um[u])um[u]={ok:0,fl:0,lw:0};if(d['Kết quả Phân loại'].startsWith('1.'))um[u].ok++;else if(d['Kết quả Phân loại'].startsWith('2.1'))um[u].fl++;else um[u].lw++;});
+    const lb=Object.keys(um).sort();
+    if(myBar)myBar.destroy();
+    myBar=new Chart(document.getElementById('barChart'),{type:'bar',data:{labels:lb,datasets:[{label:'Tín hiệu rõ (1)',data:lb.map(l=>um[l].ok),backgroundColor:'#1a7a4a'},{label:'Phụ tải đều (2.1)',data:lb.map(l=>um[l].fl),backgroundColor:'#d97706'},{label:'Tải thấp (2.2)',data:lb.map(l=>um[l].lw),backgroundColor:'#c0392b'}]},options:{scales:{x:{stacked:true},y:{stacked:true}},plugins:{legend:{position:'bottom'},title:{display:true,text:'Phân loại theo Công ty ĐL'}}}});
+}
 
-        try {
-            for (let i = 0; i < files.length; i++) {
-                let file = files[i];
-                fileNames.push(file.name);
-                
-                let data = await readFileAsArrayBuffer(file);
-                let wb = XLSX.read(data, {type: 'array'});
-                let sheetData = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+function renderDrChart(){
+    const um={};
+    finalData.forEach(d=>{const u=d['Công ty ĐL'].replace('CÔNG TY ĐIỆN LỰC','PC').replace('Công ty Điện lực','PC');if(!um[u])um[u]=0;um[u]+=d._drKw;});
+    const s=Object.entries(um).sort((a,b)=>b[1]-a[1]);
+    if(myDr)myDr.destroy();
+    myDr=new Chart(document.getElementById('drChart'),{type:'bar',data:{labels:s.map(x=>x[0]),datasets:[{label:'Biên độ đỉnh-nền (MW)',data:s.map(x=>+(x[1]/1000).toFixed(2)),backgroundColor:'#0e7490'}]},options:{indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{title:{display:true,text:'MW'}}}}});
+}
 
-                if (sheetData.length > 0) {
-                    let keys = Object.keys(sheetData[0]);
-                    
-                    // Kiểm tra xem đây là file Dữ liệu 24h hay file Danh mục (Đặc điểm phụ tải)
-                    if (keys.includes("00:00") && (keys.includes("Mã KH") || keys.includes("Mã khách hàng"))) {
-                        rawData24h = sheetData;
-                        console.log("Đã nạp file Dữ liệu 24h");
-                    } 
-                    else if (keys.includes("Đặc điểm phụ tải")) {
-                        // Nạp vào bộ nhớ Database gốc
-                        let maKhKey = keys.includes("Mã khách hàng") ? "Mã khách hàng" : (keys.includes("Mã KH") ? "Mã KH" : null);
-                        if (maKhKey) {
-                            sheetData.forEach(row => {
-                                if (row[maKhKey] && row["Đặc điểm phụ tải"]) {
-                                    referenceDatabase[row[maKhKey]] = row["Đặc điểm phụ tải"];
-                                }
-                            });
-                            console.log(`Đã nạp Từ điển Danh mục: ${Object.keys(referenceDatabase).length} khách hàng.`);
-                        }
-                    }
-                }
-            }
+function renderPrioChart(){
+    const c={A:0,B:0,C:0,D:0};
+    finalData.forEach(d=>c[d._pri]++);
+    if(myPrio)myPrio.destroy();
+    myPrio=new Chart(document.getElementById('prioChart'),{type:'doughnut',data:{labels:['A — Đáng khảo sát','B — Tìm hiểu thêm','C — Theo dõi','D — Tín hiệu yếu'],datasets:[{data:[c.A,c.B,c.C,c.D],backgroundColor:['#0e7490','#1d4ed8','#d97706','#c0392b']}]},options:{plugins:{legend:{position:'bottom'},title:{display:true,text:'Phân bổ Nhóm Tín hiệu Kỹ thuật'}}}});
+}
 
-            document.getElementById('fileNameDisplay').innerHTML = `✅ Đã tải lên: <b>${fileNames.join(' <br>+ ')}</b>`;
-            
-            if (rawData24h.length > 0) {
-                document.getElementById('btnExecute').disabled = false;
-            } else {
-                alert("Bạn chưa tải lên file có chứa cột dữ liệu 24 giờ (từ 00:00 đến 23:00)!");
-                document.getElementById('btnExecute').disabled = true;
-            }
+function renderIndChart(){
+    const m={};
+    finalData.forEach(d=>{const i=d['Dự báo Ngành Nghề']||'Khác';if(!m[i])m[i]=0;m[i]+=d._drKw;});
+    const top=Object.entries(m).sort((a,b)=>b[1]-a[1]).slice(0,10);
+    if(myInd)myInd.destroy();
+    myInd=new Chart(document.getElementById('indChart'),{type:'bar',data:{labels:top.map(x=>x[0].length>20?x[0].substring(0,18)+'…':x[0]),datasets:[{label:'MW',data:top.map(x=>+(x[1]/1000).toFixed(2)),backgroundColor:'#6d28d9'}]},options:{indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{title:{display:true,text:'MW'}}}}});
+}
 
-        } catch (error) {
-            alert("Có lỗi xảy ra khi đọc file. Vui lòng kiểm tra lại định dạng.");
-            console.error(error);
-        } finally {
-            hideLoading();
-        }
+function populateDropdowns(){
+    document.getElementById('customerSelect').innerHTML=finalData.map((d,i)=>{
+        const ic=d._sol?'☀️ ':'',g=d['Kết quả Phân loại'].substring(0,3);
+        return `<option value="${i}">${ic}[${g}][${d._pri}] ${d['Tên KH']}</option>`;
+    }).join('');
+    const cos=[...new Set(finalData.map(d=>d['Công ty ĐL']))].sort();
+    const coHtml='<option value="ALL">-- Toàn bộ --</option>'+cos.map(c=>`<option value="${c}">${c}</option>`).join('');
+    document.getElementById('companySelect').innerHTML=coHtml;
+    document.getElementById('filterC2').innerHTML='<option value="ALL">Tất cả Công ty ĐL</option>'+cos.map(c=>`<option value="${c}">${c}</option>`).join('');
+    if(finalData.length>0){drawCustomerChart();drawGroupChart();}
+}
+
+function drawCustomerChart(){
+    const idx=+document.getElementById('customerSelect').value;
+    if(!finalData[idx])return;
+    const d=finalData[idx];
+    const si=+document.getElementById('timeStart').value;
+    const ei=+document.getElementById('timeEnd').value;
+    const pc={A:'b-pa',B:'b-pb',C:'b-pc',D:'b-pd'}[d._pri];
+    const mc={DATABASE:'b-db',NLP:'b-nlp',ONNX:'b-onnx',RULES:'b-rules'}[d._meth]||'b-rules';
+    const mi={DATABASE:'🗄️',NLP:'🔍',ONNX:'🤖',RULES:'📊'}[d._meth]||'📊';
+    document.getElementById('custBadges').innerHTML=`
+        <span class="badge b-est">⚡ ${Math.round(d._annual/1000).toLocaleString('vi-VN')} MWh/năm</span>
+        <span class="badge ${pc}">🎯 Nhóm ${d._pri}</span>
+        <span class="badge b-score">Điểm tín hiệu: ${d._score}/100</span>
+        <span class="badge b-score">📊 Biên độ đỉnh-nền: ${Math.round(d._drKw)} kW</span>
+        <span class="badge ${mc}">${mi} ${d._ind}</span>
+        ${d._sol?'<span class="badge b-solar">☀️ Nghi ngờ ĐMTMN</span>':''}
+    `;
+    document.getElementById('drBar').style.display='block';
+    document.getElementById('drFill').style.width=Math.min(d._flex,100).toFixed(1)+'%';
+    const col=d['Kết quả Phân loại'].startsWith('2.1')?'#d97706':d['Kết quả Phân loại'].startsWith('2.2')?'#c0392b':'#1a7a4a';
+    if(myCust)myCust.destroy();
+    const peakPl={id:'pz',beforeDraw(c){const{ctx,chartArea:{left,right,top,bottom},scales:{x}}=c;const x1=x.getPixelForValue(si),x2=x.getPixelForValue(ei);ctx.save();ctx.fillStyle='rgba(239,68,68,0.10)';ctx.fillRect(x1,top,x2-x1,bottom-top);ctx.restore();}};
+    myCust=new Chart(document.getElementById('custChart'),{type:'line',data:{labels:TL,datasets:[{label:'CS (kW)',data:d._vals,borderColor:col,backgroundColor:col+'22',borderWidth:2,fill:true,tension:0.3,pointRadius:2}]},options:{responsive:true,plugins:{title:{display:true,text:`Phụ tải: ${d['Tên KH']}`},legend:{display:false}},scales:{y:{beginAtZero:true}}},plugins:[peakPl]});
+}
+
+function drawGroupChart(){
+    const comp=document.getElementById('companySelect').value;
+    const fd=comp==='ALL'?finalData:finalData.filter(d=>d['Công ty ĐL']===comp);
+    const s1=Array(24).fill(0),s21=Array(24).fill(0),s22=Array(24).fill(0);
+    fd.forEach(d=>{const a=d['Kết quả Phân loại'].startsWith('1.')?s1:d['Kết quả Phân loại'].startsWith('2.1')?s21:s22;for(let i=0;i<24;i++)a[i]+=d._vals[i];});
+    if(myGrp)myGrp.destroy();
+    myGrp=new Chart(document.getElementById('groupChart'),{type:'line',data:{labels:TL,datasets:[{label:'Nhóm 1 — Tín hiệu rõ',data:s1,borderColor:'#1a7a4a',tension:0.3,pointRadius:0},{label:'Nhóm 2.1 — Phụ tải đều',data:s21,borderColor:'#d97706',tension:0.3,pointRadius:0},{label:'Nhóm 2.2 — Tải thấp',data:s22,borderColor:'#c0392b',tension:0.3,pointRadius:0}]},options:{responsive:true,plugins:{title:{display:true,text:`Tổng công suất theo phân loại — ${comp==='ALL'?'Toàn bộ':comp}`},legend:{position:'bottom'}},scales:{y:{beginAtZero:true}}}});
+}
+
+function renderPrioTable(){
+    const fp=document.getElementById('filterP').value;
+    const fc=document.getElementById('filterC2').value;
+    const fs=document.getElementById('searchKH').value.toLowerCase();
+    let data=finalData.filter(d=>{
+        if(fp!=='ALL'&&d._pri!==fp)return false;
+        if(fc!=='ALL'&&d['Công ty ĐL']!==fc)return false;
+        if(fs&&!d['Tên KH'].toLowerCase().includes(fs))return false;
+        return true;
+    }).sort((a,b)=>b._score-a._score);
+    document.getElementById('prioCount').innerText=`Đang hiển thị: ${data.length} KH`;
+    const pc={A:'#0e7490',B:'#1d4ed8',C:'#d97706',D:'#c0392b'};
+    document.getElementById('prioTbody').innerHTML=data.slice(0,500).map((d,i)=>
+        `<tr><td>${i+1}</td><td style="text-align:left;font-weight:600">${d['Tên KH']}</td>
+        <td style="font-size:11px">${d['Công ty ĐL'].replace('CÔNG TY ĐIỆN LỰC','PC').replace('Công ty Điện lực','PC')}</td>
+        <td>${d['Kết quả Phân loại'].substring(0,3)}</td>
+        <td><span style="background:${pc[d._pri]};color:white;padding:3px 8px;border-radius:12px;font-size:11px;font-weight:700">${d._pri}</span></td>
+        <td>${d._score}<div class="sbar"><div class="sfill" style="width:${d._score}%"></div></div></td>
+        <td style="font-weight:700;color:#0e7490">${Math.round(d._drKw).toLocaleString('vi-VN')}</td>
+        <td>${d._flex.toFixed(1)}%</td>
+        <td>${(d._annual/1000).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,',')}</td>
+        <td style="font-size:11px;text-align:left">${d._ind}</td>
+        <td>${d._sol?'☀️':'—'}</td></tr>`
+    ).join('');
+}
+
+function renderUnitTable(){
+    const um={};
+    finalData.forEach(d=>{
+        const u=d['Công ty ĐL'];
+        if(!um[u])um[u]={ok:0,fl:0,lw:0,v1:0,v5:0,v2:0,vl:0,sol:0,pa:0,drMw:0,fxS:0,fxN:0};
+        const m=um[u];
+        if(d['Kết quả Phân loại'].startsWith('1.'))m.ok++;
+        else if(d['Kết quả Phân loại'].startsWith('2.1'))m.fl++;
+        else m.lw++;
+        if(d._vg.startsWith('1.'))m.v1++;else if(d._vg.startsWith('2.'))m.v5++;else if(d._vg.startsWith('3.'))m.v2++;else m.vl++;
+        if(d._sol)m.sol++;if(d._pri==='A')m.pa++;
+        m.drMw+=d._drKw;m.fxS+=d._flex;m.fxN++;
     });
+    let html='',tot={ok:0,fl:0,lw:0,v1:0,v5:0,v2:0,vl:0,sol:0,pa:0,drMw:0};
+    Object.keys(um).sort().forEach(u=>{
+        const m=um[u],total=m.ok+m.fl+m.lw,fa=m.fxN>0?(m.fxS/m.fxN).toFixed(1):'0.0';
+        html+=`<tr><td style="text-align:left;font-weight:600">${u}</td>
+            <td style="color:#1a7a4a;font-weight:700">${m.ok}</td><td style="color:#d97706">${m.fl}</td>
+            <td style="color:#c0392b">${m.lw}</td><td style="font-weight:700">${total}</td>
+            <td>${m.v1}</td><td>${m.v5}</td><td>${m.v2}</td><td>${m.vl}</td>
+            <td style="color:#0e7490;font-weight:700">${m.pa}</td>
+            <td style="color:#6d28d9;font-weight:700">${(m.drMw/1000).toFixed(1)}</td>
+            <td>${fa}%</td><td style="color:#b45309;font-weight:700">${m.sol}</td></tr>`;
+        ['ok','fl','lw','v1','v5','v2','vl','sol','pa'].forEach(k=>tot[k]=(tot[k]||0)+m[k]);
+        tot.drMw=(tot.drMw||0)+m.drMw;
+    });
+    const tt=(tot.ok||0)+(tot.fl||0)+(tot.lw||0);
+    html+=`<tr style="background:#cce5ff;font-weight:700;color:#004a99">
+        <td style="text-align:left">TỔNG CỘNG</td>
+        <td style="color:#1a7a4a">${tot.ok}</td><td style="color:#d97706">${tot.fl}</td>
+        <td style="color:#c0392b">${tot.lw}</td><td>${tt}</td>
+        <td>${tot.v1}</td><td>${tot.v5}</td><td>${tot.v2}</td><td>${tot.vl}</td>
+        <td style="color:#0e7490">${tot.pa}</td>
+        <td style="color:#6d28d9">${(tot.drMw/1000).toFixed(1)}</td>
+        <td>—</td><td style="color:#b45309">${tot.sol}</td></tr>`;
+    document.getElementById('unitTbody').innerHTML=html;
+}
 
-    function triggerAnalysis() {
-        document.getElementById('btnExecute').disabled = true;
-        showLoading("🤖 Hệ thống AI Đa Lớp (Database + NLP + ONNX) đang phân tích...");
-        
-        setTimeout(async () => {
-            await analyzeDataAsync(rawData24h);
-            document.getElementById('btnExecute').disabled = false;
-            hideLoading();
-            document.getElementById('results').scrollIntoView({ behavior: 'smooth' });
-        }, 50);
-    }
+function exportExcel(){
+    if(!finalData.length)return;
+    const rows=finalData.map(d=>{const r={...d};['_vals','_annual','_vg','_sol','_ind','_meth','_score','_pri','_drKw','_flex'].forEach(k=>delete r[k]);return r;});
+    const ws=XLSX.utils.json_to_sheet(rows);
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,ws,'PhanLoai_TinHieu_DayDu');
+    XLSX.writeFile(wb,'BaoCao_PhanLoai_TinHieu_2026.xlsx');
+}
 
-    async function analyzeDataAsync(data) {
-        const startIdx = parseInt(document.getElementById('timeStart').value);
-        const endIdx = parseInt(document.getElementById('timeEnd').value);
-        const cvThresholdDecimal = parseFloat(document.getElementById('cvThreshold').value) / 100;
-        const lowThresholdDecimal = parseFloat(document.getElementById('lowThreshold').value) / 100;
-        const activeDays = parseFloat(document.getElementById('activeDays').value);
-
-        let hourKeys = [];
-        if (data.length > 0) {
-            hourKeys = Object.keys(data[0]).slice(-24);
-        }
-
-        // TẢI MÔ HÌNH AI ONNX
-        let aiSession = null;
-        try {
-            ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/';
-            aiSession = await ort.InferenceSession.create('model.onnx');
-            console.log("✅ Tải Model AI ONNX thành công!");
-        } catch (e) {
-            console.error("⚠️ Lỗi khởi tạo AI ONNX:", e);
-        }
-
-        let processedData = [];
-
-        // PHÂN TÍCH TỪNG KHÁCH HÀNG
-        for (let i = 0; i < data.length; i++) {
-            let row = data[i];
-            
-            const getVal = (possibleKeys) => {
-                const foundKey = Object.keys(row).find(k => possibleKeys.some(pk => k.toLowerCase().includes(pk)));
-                return foundKey ? row[foundKey] : "";
-            };
-            
-            let customerId = getVal(['mã kh', 'mã khách hàng']) || "";
-            let customerName = getVal(['tên kh', 'khách hàng', 'tên']) || "Khách hàng ẩn danh";
-
-            const vals = hourKeys.map(k => parseFloat(row[k]) || 0);
-            const max = vals.length > 0 ? Math.max(...vals) : 0;
-            const avg = vals.reduce((a, b) => a + b, 0) / (vals.length || 1);
-            
-            const peakVals = vals.slice(startIdx, endIdx + 1);
-            const peakAvg = peakVals.reduce((sum, val) => sum + val, 0) / (peakVals.length || 1);
-
-            const variance = vals.reduce((sum, val) => sum + Math.pow(val - avg, 2), 0) / (vals.length > 1 ? vals.length - 1 : 1);
-            const std = Math.sqrt(variance);
-            const cv = avg > 0 ? (std / avg) : 0; 
-
-            const annualEst = vals.reduce((sum, val) => sum + val, 0) * activeDays;
-            
-            let volGroup = "";
-            if (annualEst >= 1000000) volGroup = "1. >= 1 Triệu kWh";
-            else if (annualEst >= 500000) volGroup = "2. Từ 500k - < 1 Triệu kWh";
-            else if (annualEst >= 200000) volGroup = "3. Từ 200k - < 500k kWh";
-            else volGroup = "4. < 200k kWh";
-
-            const midDayAvg = vals.slice(10, 15).reduce((a,b)=>a+b,0) / 5;
-            const nightAvg = vals.slice(18, 23).reduce((a,b)=>a+b,0) / 5;
-            const morningAvg = vals.slice(5, 9).reduce((a,b)=>a+b,0) / 4;
-            let hasSolar = (nightAvg > 10 && morningAvg > 10 && midDayAvg < (0.5 * nightAvg) && midDayAvg < (0.5 * morningAvg));
-
-            // =======================================================
-            // KIẾN TRÚC AI 3 LỚP (DATABASE -> NLP -> ONNX)
-            // =======================================================
-            let predictedIndustry = "Chưa xác định";
-            let aiMethod = ""; 
-
-            // LỚP 0: ĐỐI CHIẾU VỚI DATABASE GỐC (Ground Truth)
-            if (customerId && referenceDatabase[customerId]) {
-                predictedIndustry = referenceDatabase[customerId];
-                aiMethod = "DATABASE"; // Dữ liệu chính xác 100%
-            }
-            // LỚP 1: Chạy Xử lý ngôn ngữ tự nhiên (NLP) trên Tên KH
-            else {
-                let nlpPrediction = predictIndustryByNLP(customerName);
-                if (nlpPrediction) {
-                    predictedIndustry = nlpPrediction;
-                    aiMethod = "NLP"; 
-                } 
-                // LỚP 2: Dùng AI ONNX nhìn vào đường cong 24h
-                else if (max > 0) {
-                    if (aiSession) {
-                        // --- ONNX AI (Lớp 2a): Dùng model đã huấn luyện ---
-                        try {
-                            // Nhãn ngành theo index model (phải khớp thứ tự lúc train)
-                            const ONNX_LABELS = [
-                                "Sản xuất các sản phẩm từ cao su và nhựa các loại",
-                                "Chế biến thực phẩm",
-                                "Sản xuất nước đá",
-                                "May mặc / Dệt nhuộm",
-                                "Xay xát - Lau bóng gạo",
-                                "Cơ khí / Kim loại",
-                                "Chế biến thủy sản",
-                                "Da giày / Túi xách",
-                                "Chăn nuôi / Nông nghiệp",
-                                "Sản xuất giấy và sản phẩm từ giấy",
-                                "Khai thác đá / Vật liệu xây dựng",
-                                "Chế biến gỗ",
-                                "Kho lạnh / Cấp đông",
-                                "Sản xuất đồ uống",
-                                "Chế biến thực phẩm & Nông sản",
-                                "Sản xuất / Thương mại tổng hợp"
-                            ];
-                            let normalized_vals = vals.map(v => v / max);
-                            // ✅ Lấy tên input động, không hardcode
-                            let inputName = aiSession.inputNames[0];
-                            let tensor = new ort.Tensor('float32', new Float32Array(normalized_vals), [1, 24]);
-                            let results = await aiSession.run({ [inputName]: tensor });
-                            let outputName = aiSession.outputNames[0];
-                            let rawOut = results[outputName].data[0];
-                            // ✅ Xử lý cả output dạng số (index) và dạng chuỗi
-                            if (typeof rawOut === 'number' || typeof rawOut === 'bigint') {
-                                const idx = Number(rawOut);
-                                predictedIndustry = ONNX_LABELS[idx] ?? `Nhóm ${idx}`;
-                            } else {
-                                predictedIndustry = String(rawOut);
-                            }
-                            aiMethod = "ONNX"; 
-                        } catch (err) {
-                            console.warn("ONNX lỗi, chuyển sang Rules:", err.message);
-                            // Fallthrough xuống Rules dự phòng bên dưới
-                            aiSession = null;
-                        }
-                    }
-                    
-                    // --- Rules dự phòng (Lớp 2b): Từ thống kê 3.578 KH thực tế EVNSPC ---
-                    if (!aiSession && aiMethod !== "ONNX") {
-                        const nightAvgR = (vals[22]+vals[23]+vals[0]+vals[1]+vals[2]+vals[3]+vals[4]) / 7;
-                        const dayAvgR   = (vals[8]+vals[9]+vals[10]+vals[11]+vals[12]+vals[13]+vals[14]+vals[15]+vals[16]) / 9;
-                        const eveAvgR   = (vals[17]+vals[18]+vals[19]+vals[20]+vals[21]) / 5;
-                        const night_r = avg > 0 ? nightAvgR / avg : 0;
-                        const day_r   = avg > 0 ? dayAvgR   / avg : 0;
-                        const eve_r   = avg > 0 ? eveAvgR   / avg : 0;
-
-                        if      (cv > 0.90 && night_r > 0.85)                      predictedIndustry = "Xay xát - Lau bóng gạo";
-                        else if (cv > 0.90 && day_r > 1.40)                        predictedIndustry = "Khai thác đá / Vật liệu xây dựng";
-                        else if (night_r > 1.30 && eve_r < 0.70)                   predictedIndustry = "Sản xuất đồ uống";
-                        else if (night_r > 1.10 && day_r < 1.05 && eve_r < 0.80)  predictedIndustry = "Sản xuất nước đá";
-                        else if (night_r < 0.50 && day_r > 1.50)                   predictedIndustry = "Da giày / Túi xách";
-                        else if (night_r < 0.65 && day_r > 1.40 && eve_r < 0.80)  predictedIndustry = "Khai thác đá / Vật liệu xây dựng";
-                        else if (night_r < 0.65 && day_r > 1.30)                   predictedIndustry = "Cơ khí / Kim loại";
-                        else if (cv < 0.22 && day_r > 1.05)                        predictedIndustry = "Chăn nuôi / Nông nghiệp";
-                        else if (cv < 0.32 && night_r > 0.78 && day_r > 1.15)     predictedIndustry = "Sản xuất các sản phẩm từ cao su và nhựa các loại";
-                        else if (cv > 0.55 && night_r > 0.75 && day_r > 1.20)     predictedIndustry = "Cơ khí / Kim loại";
-                        else if (cv > 0.40 && day_r > 1.15 && eve_r > 0.95)       predictedIndustry = "Chế biến thủy sản";
-                        else if (cv > 0.35 && day_r > 1.20 && eve_r < 0.92)       predictedIndustry = "Chế biến thực phẩm";
-                        else if (cv < 0.40 && night_r > 0.82 && eve_r > 0.98)     predictedIndustry = "May mặc / Dệt nhuộm";
-                        else if (night_r > 1.00 && day_r > 1.00 && cv > 0.45)     predictedIndustry = "Chế biến lúa gạo";
-                        else if (cv < 0.35 && day_r > 1.10)                        predictedIndustry = "Sản xuất giấy và sản phẩm từ giấy";
-                        else                                                        predictedIndustry = "Sản xuất / Thương mại tổng hợp";
-                        aiMethod = "RULES";
-                    }
-                }
-            }
-
-            // =======================================================
-            // Phân loại DR
-            let resultCategory = "1. Đáp ứng tham gia DR";
-            let explanation = "";
-            const thresholdKw = lowThresholdDecimal * max;
-
-            if (max === 0) {
-                resultCategory = "2.2. Sử dụng thấp/Không dùng ở đỉnh";
-                explanation = "Khách hàng không sử dụng điện.";
-            } else if (peakAvg < thresholdKw) {
-                resultCategory = "2.2. Sử dụng thấp/Không dùng ở đỉnh";
-                explanation = `Công suất tại giờ đỉnh (${peakAvg.toFixed(2)} kW) thấp hơn ngưỡng ${lowThresholdDecimal*100}% Max.`;
-            } else if (cv < cvThresholdDecimal) {
-                resultCategory = "2.1. Phụ tải tương đối phẳng";
-                explanation = `Hệ số biến thiên CV (${(cv*100).toFixed(1)}%) nhỏ hơn ngưỡng phẳng. Phụ tải chạy đều đặn.`;
-            } else {
-                explanation = `Phụ tải có dao động (CV = ${(cv*100).toFixed(1)}%) và có điện tại giờ đỉnh (${peakAvg.toFixed(2)} kW).`;
-            }
-
-            if (hasSolar) explanation += " [Nghi ngờ lắp ĐMTMN].";
-
-            processedData.push({ 
-                ...row, 
-                "_data24h": vals, 
-                "_annualEst": annualEst,
-                "_volGroup": volGroup,
-                "_hasSolar": hasSolar,
-                "_predictedIndustry": predictedIndustry,
-                "_aiMethod": aiMethod, 
-                "Công ty ĐL": getVal(['công ty', 'điện lực', 'đơn vị']) || "Đơn vị Khác",
-                "Tên KH": customerName,
-                "Công suất Max (kW)": max.toFixed(2),
-                "Trung bình Giờ DR (kW)": peakAvg.toFixed(2),
-                "Hệ số biến thiên CV (%)": (cv * 100).toFixed(1) + "%",
-                "Dự báo Ngành Nghề": predictedIndustry,
-                "PP Nhận diện": aiMethod === "DATABASE" ? "🗄️ Từ Dữ liệu gốc" : (aiMethod === "NLP" ? "🔍 Qua Tên KH" : (aiMethod === "ONNX" ? "🤖 AI ONNX" : "📊 Rules thống kê")),
-                "Dự báo SL Năm (kWh)": Math.round(annualEst),
-                "Nhóm Sản lượng": volGroup,
-                "Dự báo ĐMTMN": hasSolar ? "Có khả năng (Đường cong cổ vịt)" : "Không rõ",
-                "Kết quả Phân loại": resultCategory,
-                "Lý do Phân loại (Diễn giải)": explanation
-            });
-        }
-
-        finalData = processedData;
-        updateDashboard();
-        populateDropdowns();
-    }
-
-    // ==========================================
-    // CÁC HÀM VẼ GIAO DIỆN
-    // ==========================================
-    function populateDropdowns() {
-        const cusSelect = document.getElementById('customerSelect');
-        let cusHtmlStr = ''; 
-        finalData.forEach((d, i) => {
-            const groupType = d["Kết quả Phân loại"].substring(0, 3);
-            const solarIcon = d["_hasSolar"] ? "☀️ " : "";
-            cusHtmlStr += `<option value="${i}">${solarIcon}[Nhóm ${groupType}] ${d['Tên KH']}</option>`;
-        });
-        cusSelect.innerHTML = cusHtmlStr; 
-
-        const compSelect = document.getElementById('companySelect');
-        const companies = [...new Set(finalData.map(d => d['Công ty ĐL']))].sort();
-        let compHtmlStr = '<option value="ALL">-- Toàn Tổng Công ty --</option>';
-        companies.forEach(c => { compHtmlStr += `<option value="${c}">${c}</option>`; });
-        compSelect.innerHTML = compHtmlStr;
-
-        if(finalData.length > 0) {
-            drawCustomerLineChart();
-            drawGroupLineChart();
-        }
-    }
-
-    function updateDashboard() {
-        document.getElementById('results').style.display = 'block';
-        document.getElementById('btnExport').style.display = 'block';
-        const summary = { total: finalData.length, ok: 0, flat: 0, low: 0, solar: 0, v1m: 0, v500k: 0, v200k: 0, vLow: 0 };
-        const unitMap = {};
-        finalData.forEach(d => {
-            const type = d["Kết quả Phân loại"], volType = d["_volGroup"], unit = d["Công ty ĐL"];
-            if(!unitMap[unit]) unitMap[unit] = { ok: 0, flat: 0, low: 0, v1m: 0, v500k: 0, v200k: 0, vLow: 0, solar: 0 };
-            if(type.startsWith("1.")) { summary.ok++; unitMap[unit].ok++; }
-            else if(type.startsWith("2.1")) { summary.flat++; unitMap[unit].flat++; }
-            else { summary.low++; unitMap[unit].low++; }
-            if(volType.startsWith("1.")) { unitMap[unit].v1m++; summary.v1m++; }
-            else if(volType.startsWith("2.")) { unitMap[unit].v500k++; summary.v500k++; }
-            else if(volType.startsWith("3.")) { unitMap[unit].v200k++; summary.v200k++; }
-            else { unitMap[unit].vLow++; summary.vLow++; }
-            if(d["_hasSolar"]) { summary.solar++; unitMap[unit].solar++; }
-        });
-        document.getElementById('s-total').innerText = summary.total; document.getElementById('s-ok').innerText = summary.ok;
-        document.getElementById('s-flat').innerText = summary.flat; document.getElementById('s-low').innerText = summary.low;
-        document.getElementById('s-solar').innerText = summary.solar;
-
-        const tbody = document.querySelector('#tblUnit tbody');
-        let tableHtmlStr = ""; const labels = [], dataOk = [], dataFlat = [], dataLow = [];
-        Object.keys(unitMap).sort().forEach(u => {
-            const s = unitMap[u], total = s.ok + s.flat + s.low;
-            tableHtmlStr += `<tr><td style="text-align:left; font-weight:bold;">${u}</td><td style="color:#28a745; font-weight:bold;">${s.ok}</td><td style="color:#fd7e14;">${s.flat}</td><td style="color:#dc3545;">${s.low}</td><td style="font-weight:bold; background:#f8f9fa;">${total}</td><td>${s.v1m}</td><td>${s.v500k}</td><td>${s.v200k}</td><td>${s.vLow}</td><td style="font-weight:bold; color:#d39e00;">${s.solar}</td></tr>`;
-            labels.push(u.replace("CÔNG TY ĐIỆN LỰC", "PC").replace("Công ty Điện lực", "PC"));
-            dataOk.push(s.ok); dataFlat.push(s.flat); dataLow.push(s.low);
-        });
-        tableHtmlStr += `<tr style="background-color: #cce5ff; font-weight: bold; font-size: 14px;"><td style="text-align:left; color: #004a99; text-transform: uppercase;">TỔNG CỘNG</td><td style="color:#28a745;">${summary.ok}</td><td style="color:#fd7e14;">${summary.flat}</td><td style="color:#dc3545;">${summary.low}</td><td style="background:#b8daff; color: #004a99;">${summary.total}</td><td>${summary.v1m}</td><td>${summary.v500k}</td><td>${summary.v200k}</td><td>${summary.vLow}</td><td style="color:#d39e00;">${summary.solar}</td></tr>`;
-        tbody.innerHTML = tableHtmlStr; 
-        renderOverviewCharts(summary, labels, dataOk, dataFlat, dataLow);
-    }
-
-    function drawCustomerLineChart() {
-        const idx = document.getElementById('customerSelect').value;
-        if (!idx || !finalData[idx]) return;
-        const customer = finalData[idx];
-        document.getElementById('customerAnnualEst').innerText = customer._annualEst.toLocaleString('vi-VN');
-        document.getElementById('customerVolGroup').innerText = `(${customer._volGroup})`;
-        
-        // Hiển thị dự báo ngành nghề và Huy hiệu Phương pháp
-        document.getElementById('customerIndustry').innerText = customer._predictedIndustry;
-        const badge = document.getElementById('industryBadge');
-        const icon = document.getElementById('aiIcon');
-        
-        if(customer._aiMethod === "DATABASE") {
-            badge.className = "industry-badge badge-db";
-            icon.innerText = "🗄️";
-            document.getElementById('customerIndustry').title = "Trích xuất chính xác 100% từ Danh mục dữ liệu gốc bạn tải lên";
-        } else if(customer._aiMethod === "NLP") {
-            badge.className = "industry-badge badge-nlp";
-            icon.innerText = "🔍"; 
-            document.getElementById('customerIndustry').title = "Được nhận diện tự động thông qua Tên Khách hàng";
-        } else if(customer._aiMethod === "ONNX") {
-            badge.className = "industry-badge badge-ai";
-            icon.innerText = "🤖"; 
-            document.getElementById('customerIndustry').title = "Được dự báo bằng Mô hình AI ONNX thông qua Biểu đồ Phụ tải";
-        } else {
-            badge.className = "industry-badge badge-rules";
-            icon.innerText = "📊";
-            document.getElementById('customerIndustry').title = "Được dự báo bằng Rules thống kê từ dữ liệu thực tế 3.578 KH EVNSPC";
-        }
-
-        document.getElementById('solarBadge').style.display = customer._hasSolar ? 'inline-block' : 'none';
-        let lineColor = customer["Kết quả Phân loại"].includes("2.1") ? '#fd7e14' : (customer["Kết quả Phân loại"].includes("2.2") ? '#dc3545' : '#20c997'); 
-        if (myCustomerChart) myCustomerChart.destroy();
-        myCustomerChart = new Chart(document.getElementById('customerLineChart').getContext('2d'), {
-            type: 'line', data: { labels: TIME_LABELS, datasets: [{ label: 'Công suất (kW)', data: customer._data24h, borderColor: lineColor, backgroundColor: lineColor + '33', borderWidth: 2, fill: true, tension: 0.3, pointRadius: 3 }] },
-            options: { responsive: true, plugins: { title: { display: true, text: `Biểu đồ Phụ tải: ${customer['Tên KH']}` }, legend: { display: false } }, scales: { y: { beginAtZero: true, title: { display: true, text: 'Công suất (kW)' } } } }
-        });
-    }
-
-    function drawGroupLineChart() {
-        const selectedCompany = document.getElementById('companySelect').value;
-        let filteredData = selectedCompany !== "ALL" ? finalData.filter(d => d['Công ty ĐL'] === selectedCompany) : finalData;
-        let sumOk = Array(24).fill(0), sumFlat = Array(24).fill(0), sumLow = Array(24).fill(0);
-        filteredData.forEach(d => {
-            for(let i=0; i<24; i++) {
-                if(d["Kết quả Phân loại"].startsWith("1.")) sumOk[i] += d._data24h[i];
-                else if(d["Kết quả Phân loại"].startsWith("2.1")) sumFlat[i] += d._data24h[i];
-                else sumLow[i] += d._data24h[i];
-            }
-        });
-        if (myGroupChart) myGroupChart.destroy();
-        myGroupChart = new Chart(document.getElementById('groupLineChart').getContext('2d'), {
-            type: 'line', data: { labels: TIME_LABELS, datasets: [{ label: 'Nhóm 1 (Đáp ứng)', data: sumOk, borderColor: '#20c997', backgroundColor: '#20c997', tension: 0.3 }, { label: 'Nhóm 2.1 (Phẳng)', data: sumFlat, borderColor: '#fd7e14', backgroundColor: '#fd7e14', tension: 0.3 }, { label: 'Nhóm 2.2 (Thấp)', data: sumLow, borderColor: '#e83e8c', backgroundColor: '#e83e8c', tension: 0.3 }] },
-            options: { responsive: true, plugins: { title: { display: true, text: `Tổng CS - ${selectedCompany === 'ALL' ? 'Toàn bộ' : selectedCompany}` }, legend: { position: 'bottom' } }, scales: { y: { beginAtZero: true } } }
-        });
-    }
-
-    function renderOverviewCharts(summary, labels, dataOk, dataFlat, dataLow) {
-        if (myPieChart) myPieChart.destroy(); if (myBarChart) myBarChart.destroy();
-        myPieChart = new Chart(document.getElementById('pieChart').getContext('2d'), { type: 'doughnut', data: { labels: ['Đáp ứng', 'Phẳng (2.1)', 'Thấp (2.2)'], datasets: [{ data: [summary.ok, summary.flat, summary.low], backgroundColor: ['#20c997', '#fd7e14', '#e83e8c'] }] } });
-        myBarChart = new Chart(document.getElementById('barChart').getContext('2d'), { type: 'bar', data: { labels: labels, datasets: [{ label: 'Đáp ứng', data: dataOk, backgroundColor: '#20c997' }, { label: 'Phẳng (2.1)', data: dataFlat, backgroundColor: '#fd7e14' }, { label: 'Thấp (2.2)', data: dataLow, backgroundColor: '#e83e8c' }] }, options: { scales: { x: { stacked: true }, y: { stacked: true } } } });
-    }
-
-    function exportExcel() {
-        if(finalData.length === 0) return;
-        const cleanData = finalData.map(d => { const newRow = { ...d }; delete newRow._data24h; delete newRow._annualEst; delete newRow._volGroup; delete newRow._hasSolar; delete newRow._predictedIndustry; delete newRow._aiMethod; return newRow; });
-        const ws = XLSX.utils.json_to_sheet(cleanData); ws['!cols'] = [{wch: 25}, {wch: 15}, {wch: 35}, {wch: 15}]; 
-        const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "PhanLoai_DR");
-        XLSX.writeFile(wb, "Bao_cao_Phan_Loai_DR_Co_AI.xlsx");
-    }
+function exportPriorityExcel(){
+    if(!finalData.length)return;
+    const rows=finalData.filter(d=>d._pri==='A'||d._pri==='B').sort((a,b)=>b._score-a._score).map(d=>({
+        'Nhóm Tín hiệu':d['Nhóm Tín hiệu Kỹ thuật'],'Điểm Tín hiệu':d._score,
+        'Công ty ĐL':d['Công ty ĐL'],'Mã KH':d['Mã KH'],'Tên KH':d['Tên KH'],
+        'Biên độ Đỉnh-Nền (kW)':Math.round(d._drKw),'Mức dao động tải đỉnh (%)':d._flex.toFixed(1),
+        'SL Năm (kWh)':Math.round(d._annual),'Ngành nghề':d._ind,
+        'Kết quả Phân loại':d['Kết quả Phân loại'],'ĐMTMN':d._sol?'Có':'',
+        'Max (kW)':d['Công suất Max (kW)'],'CV (%)':d['CV (%)'],
+    }));
+    const ws=XLSX.utils.json_to_sheet(rows);
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,ws,'DanhSach_KhaoSat_AB');
+    XLSX.writeFile(wb,'DanhSach_KhaoSat_TinHieu_A_B_2026.xlsx');
+}
 </script>
-
 </body>
 </html>
