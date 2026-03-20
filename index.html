@@ -9,8 +9,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <!-- Tải thư viện Chart.js để vẽ biểu đồ -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <!-- TẢI THƯ VIỆN ONNX RUNTIME CỦA MICROSOFT ĐỂ CHẠY AI -->
-    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
+    <!-- TẢI THƯ VIỆN ONNX RUNTIME CỦA MICROSOFT ĐỂ CHẠY AI (Đã cố định bản 1.16.3 siêu ổn định) -->
+    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.16.3/dist/ort.min.js"></script>
     
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 20px; background-color: #f0f2f5; color: #333; }
@@ -253,10 +253,6 @@
         // 1. CỐ GẮNG TẢI MÔ HÌNH AI (ONNX)
         let aiSession = null;
         try {
-            // [BẢN VÁ LỖI CỰC KỲ QUAN TRỌNG KHI CHẠY TRÊN GITHUB]
-            // Buộc thư viện ONNX phải tải file .wasm từ nguồn CDN quốc tế thay vì tìm ở GitHub
-            ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/';
-            
             // Tải file mô hình AI (Đã bỏ dấu ./ để tránh lỗi đường dẫn tương đối)
             aiSession = await ort.InferenceSession.create('model.onnx');
             console.log("✅ Tải Model AI ONNX thành công!");
@@ -306,11 +302,14 @@
                         // Đưa vào Tensor 32-bit (1 dòng, 24 cột)
                         let tensor = new ort.Tensor('float32', new Float32Array(normalized_vals), [1, 24]);
                         let feeds = { float_input: tensor };
-                        // Chạy dự đoán
-                        let results = await aiSession.run(feeds);
                         
-                        // Lấy ngõ ra đầu tiên tự động (thường là nhãn ngành nghề)
+                        // Lấy tên ngõ ra (thường là 'output_label')
                         let outputName = aiSession.outputNames[0];
+                        
+                        // [BẢN VÁ LỖI CỐT LÕI]: Chỉ yêu cầu ONNX trả về nhãn (label), bỏ qua mảng xác suất (probability)
+                        // Vì thư viện web không hỗ trợ giải mã kiểu ZipMap của Python, dẫn đến Crash khi run()
+                        let results = await aiSession.run(feeds, [outputName]);
+                        
                         predictedIndustry = results[outputName].data[0]; 
                     } catch (err) {
                         console.error("Lỗi khi chạy dự đoán AI cho KH:", err);
