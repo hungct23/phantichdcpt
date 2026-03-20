@@ -43,8 +43,11 @@
         .est-badge { display: inline-block; margin-top: 10px; padding: 8px 12px; background: #e8f4fd; border: 1px solid #b6d4fe; border-radius: 5px; color: #004a99; font-size: 14px; font-weight: bold; }
         .solar-badge { display: none; margin-top: 10px; margin-left: 10px; padding: 8px 12px; background: #fff3cd; border: 1px solid #ffeeba; border-radius: 5px; color: #856404; font-size: 14px; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
         .industry-badge { display: inline-block; margin-top: 10px; margin-left: 10px; padding: 8px 12px; background: #e2e3e5; border: 1px solid #d6d8db; border-radius: 5px; color: #383d41; font-size: 14px; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        
+        /* CSS cho các huy hiệu phân loại AI */
         .badge-ai { background: #e2e3e5; border-color: #d6d8db; }
         .badge-nlp { background: #d1e7dd; border-color: #badbcc; color: #0f5132 !important; }
+        .badge-db { background: #fff3cd; border-color: #ffeeba; color: #856404 !important; }
         
         table { width: 100%; border-collapse: collapse; margin-top: 25px; background: white; font-size: 13px; }
         thead { position: sticky; top: 0; z-index: 10; }
@@ -75,11 +78,12 @@
     <h2>Hệ thống Phân tích Điều chỉnh Phụ tải (DR) 2026</h2>
     
     <div class="setup-section">
+        <!-- Đã thêm thuộc tính 'multiple' để cho phép chọn cả 2 file cùng lúc -->
         <div class="upload-box" onclick="document.getElementById('fileInput').click()">
-            <p style="font-size: 20px; color: #004a99; margin-bottom: 10px;"><b>📁 Nhấp vào đây để tải lên file dữ liệu</b></p>
-            <p style="font-size: 14px; color: #666; margin-top: 0;">(.csv, .xlsx, .xls)</p>
+            <p style="font-size: 20px; color: #004a99; margin-bottom: 10px;"><b>📁 Tải lên file Dữ liệu 24h & Danh mục KH</b></p>
+            <p style="font-size: 14px; color: #666; margin-top: 0;">(Có thể bôi đen chọn nhiều file .csv, .xlsx cùng lúc)</p>
             <p id="fileNameDisplay" style="font-weight: bold; color: #28a745; margin-top: 10px;"></p>
-            <input type="file" id="fileInput" accept=".xlsx, .xls, .csv" style="display:none">
+            <input type="file" id="fileInput" accept=".xlsx, .xls, .csv" multiple style="display:none">
         </div>
 
         <div class="config-box">
@@ -184,8 +188,10 @@
 </div>
 
 <script>
-    let rawData = [];
+    let rawData24h = []; // Chứa dữ liệu 24h
+    let referenceDatabase = {}; // Map lưu trữ: { "Mã KH": "Đặc điểm ngành nghề" }
     let finalData = [];
+    
     let myPieChart = null, myBarChart = null, myCustomerChart = null, myGroupChart = null;
     const TIME_LABELS = ["00:00","01:00","02:00","03:00","04:00","05:00","06:00","07:00","08:00","09:00","10:00","11:00","12:00","13:00","14:00","15:00","16:00","17:00","18:00","19:00","20:00","21:00","22:00","23:00"];
 
@@ -214,7 +220,6 @@
         if (!customerName) return null;
         let cleanName = removeVietnameseTones(customerName);
 
-        // Quy tắc tìm kiếm từ khóa (Keyword Matching Rules)
         const rules = [
             { keywords: ["thuy san", "thuysan", "hai san", "ca tra", "tom", "seafood"], label: "Chế biến thực phẩm & thủy sản" },
             { keywords: ["luong thuc", "thuc pham", "rau qua", "gao", "thit", "nong san"], label: "Chế biến thực phẩm & thủy sản" },
@@ -229,15 +234,16 @@
         for (let rule of rules) {
             for (let kw of rule.keywords) {
                 if (cleanName.includes(kw)) {
-                    return rule.label; // Trả về nhãn nếu tìm thấy từ khóa
+                    return rule.label; 
                 }
             }
         }
-        return null; // Trả về null nếu tên quá chung chung (VD: Công ty TNHH Phúc Thịnh)
+        return null; 
     }
+
     // ==========================================
-
-
+    // GIAO DIỆN VÀ ĐỌC FILE
+    // ==========================================
     function showLoading(message) {
         document.getElementById('loadingMessage').innerText = message;
         document.getElementById('loadingOverlay').style.display = 'flex';
@@ -257,33 +263,80 @@
         }
     });
 
-    document.getElementById('fileInput').addEventListener('change', function(e) {
-        const file = e.target.files[0];
-        if (!file) return;
-        showLoading("Đang đọc dữ liệu...");
-        document.getElementById('fileNameDisplay').innerText = `✅ Đã chọn file: ${file.name}`;
-        setTimeout(() => {
+    // Hàm đọc file dạng Promise để xử lý bất đồng bộ nhiều file
+    function readFileAsArrayBuffer(file) {
+        return new Promise((resolve, reject) => {
             const reader = new FileReader();
-            reader.onload = function(event) {
-                try {
-                    const data = new Uint8Array(event.target.result);
-                    const wb = XLSX.read(data, {type: 'array'});
-                    rawData = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
-                    document.getElementById('btnExecute').disabled = false;
-                } catch (error) {
-                    alert("Có lỗi xảy ra khi đọc file.");
-                } finally { hideLoading(); }
-            };
+            reader.onload = e => resolve(new Uint8Array(e.target.result));
+            reader.onerror = e => reject(e);
             reader.readAsArrayBuffer(file);
-        }, 50); 
+        });
+    }
+
+    document.getElementById('fileInput').addEventListener('change', async function(e) {
+        const files = e.target.files;
+        if (!files || files.length === 0) return;
+        showLoading("Đang đọc và phân loại các file dữ liệu...");
+        
+        let fileNames = [];
+        rawData24h = [];
+        referenceDatabase = {}; // Reset lại database cũ
+
+        try {
+            for (let i = 0; i < files.length; i++) {
+                let file = files[i];
+                fileNames.push(file.name);
+                
+                let data = await readFileAsArrayBuffer(file);
+                let wb = XLSX.read(data, {type: 'array'});
+                let sheetData = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+
+                if (sheetData.length > 0) {
+                    let keys = Object.keys(sheetData[0]);
+                    
+                    // Kiểm tra xem đây là file Dữ liệu 24h hay file Danh mục (Đặc điểm phụ tải)
+                    if (keys.includes("00:00") && (keys.includes("Mã KH") || keys.includes("Mã khách hàng"))) {
+                        rawData24h = sheetData;
+                        console.log("Đã nạp file Dữ liệu 24h");
+                    } 
+                    else if (keys.includes("Đặc điểm phụ tải")) {
+                        // Nạp vào bộ nhớ Database gốc
+                        let maKhKey = keys.includes("Mã khách hàng") ? "Mã khách hàng" : (keys.includes("Mã KH") ? "Mã KH" : null);
+                        if (maKhKey) {
+                            sheetData.forEach(row => {
+                                if (row[maKhKey] && row["Đặc điểm phụ tải"]) {
+                                    referenceDatabase[row[maKhKey]] = row["Đặc điểm phụ tải"];
+                                }
+                            });
+                            console.log(`Đã nạp Từ điển Danh mục: ${Object.keys(referenceDatabase).length} khách hàng.`);
+                        }
+                    }
+                }
+            }
+
+            document.getElementById('fileNameDisplay').innerHTML = `✅ Đã tải lên: <b>${fileNames.join(' <br>+ ')}</b>`;
+            
+            if (rawData24h.length > 0) {
+                document.getElementById('btnExecute').disabled = false;
+            } else {
+                alert("Bạn chưa tải lên file có chứa cột dữ liệu 24 giờ (từ 00:00 đến 23:00)!");
+                document.getElementById('btnExecute').disabled = true;
+            }
+
+        } catch (error) {
+            alert("Có lỗi xảy ra khi đọc file. Vui lòng kiểm tra lại định dạng.");
+            console.error(error);
+        } finally {
+            hideLoading();
+        }
     });
 
     function triggerAnalysis() {
         document.getElementById('btnExecute').disabled = true;
-        showLoading("🤖 AI Đa phương thức (Văn bản + Biểu đồ) đang phân tích...");
+        showLoading("🤖 Hệ thống AI Đa Lớp (Database + NLP + ONNX) đang phân tích...");
         
         setTimeout(async () => {
-            await analyzeDataAsync(rawData);
+            await analyzeDataAsync(rawData24h);
             document.getElementById('btnExecute').disabled = false;
             hideLoading();
             document.getElementById('results').scrollIntoView({ behavior: 'smooth' });
@@ -323,6 +376,7 @@
                 return foundKey ? row[foundKey] : "";
             };
             
+            let customerId = getVal(['mã kh', 'mã khách hàng']) || "";
             let customerName = getVal(['tên kh', 'khách hàng', 'tên']) || "Khách hàng ẩn danh";
 
             const vals = hourKeys.map(k => parseFloat(row[k]) || 0);
@@ -350,35 +404,41 @@
             let hasSolar = (nightAvg > 10 && morningAvg > 10 && midDayAvg < (0.5 * nightAvg) && midDayAvg < (0.5 * morningAvg));
 
             // =======================================================
-            // CƠ CHẾ AI LAI (HYBRID AI) - DỰ BÁO NGÀNH NGHỀ
+            // KIẾN TRÚC AI 3 LỚP (DATABASE -> NLP -> ONNX)
             // =======================================================
             let predictedIndustry = "Chưa xác định";
-            let aiMethod = ""; // Lưu trữ phương pháp đã dùng (NLP hay ONNX)
+            let aiMethod = ""; 
 
+            // LỚP 0: ĐỐI CHIẾU VỚI DATABASE GỐC (Ground Truth)
+            if (customerId && referenceDatabase[customerId]) {
+                predictedIndustry = referenceDatabase[customerId];
+                aiMethod = "DATABASE"; // Dữ liệu chính xác 100%
+            }
             // LỚP 1: Chạy Xử lý ngôn ngữ tự nhiên (NLP) trên Tên KH
-            let nlpPrediction = predictIndustryByNLP(customerName);
-
-            if (nlpPrediction) {
-                predictedIndustry = nlpPrediction;
-                aiMethod = "NLP"; // Nhận diện qua tên
-            } 
-            // LỚP 2: Nếu tên không có từ khóa, dùng AI ONNX nhìn vào đường cong 24h
-            else if (max > 0) {
-                if (aiSession) {
-                    try {
-                        let normalized_vals = vals.map(v => v / max);
-                        let tensor = new ort.Tensor('float32', new Float32Array(normalized_vals), [1, 24]);
-                        let feeds = { float_input: tensor };
-                        let outputName = aiSession.outputNames[0];
-                        let results = await aiSession.run(feeds, [outputName]);
-                        
-                        predictedIndustry = results[outputName].data[0]; 
-                        aiMethod = "ONNX"; // Nhận diện qua biểu đồ
-                    } catch (err) {
+            else {
+                let nlpPrediction = predictIndustryByNLP(customerName);
+                if (nlpPrediction) {
+                    predictedIndustry = nlpPrediction;
+                    aiMethod = "NLP"; 
+                } 
+                // LỚP 2: Dùng AI ONNX nhìn vào đường cong 24h
+                else if (max > 0) {
+                    if (aiSession) {
+                        try {
+                            let normalized_vals = vals.map(v => v / max);
+                            let tensor = new ort.Tensor('float32', new Float32Array(normalized_vals), [1, 24]);
+                            let feeds = { float_input: tensor };
+                            let outputName = aiSession.outputNames[0];
+                            let results = await aiSession.run(feeds, [outputName]);
+                            
+                            predictedIndustry = results[outputName].data[0]; 
+                            aiMethod = "ONNX"; 
+                        } catch (err) {
+                            predictedIndustry = "Khác";
+                        }
+                    } else {
                         predictedIndustry = "Khác";
                     }
-                } else {
-                    predictedIndustry = "Khác";
                 }
             }
 
@@ -410,14 +470,14 @@
                 "_volGroup": volGroup,
                 "_hasSolar": hasSolar,
                 "_predictedIndustry": predictedIndustry,
-                "_aiMethod": aiMethod, // Chuyển biến này ra ngoài để hiển thị
+                "_aiMethod": aiMethod, 
                 "Công ty ĐL": getVal(['công ty', 'điện lực', 'đơn vị']) || "Đơn vị Khác",
                 "Tên KH": customerName,
                 "Công suất Max (kW)": max.toFixed(2),
                 "Trung bình Giờ DR (kW)": peakAvg.toFixed(2),
                 "Hệ số biến thiên CV (%)": (cv * 100).toFixed(1) + "%",
                 "Dự báo Ngành Nghề": predictedIndustry,
-                "PP Nhận diện": aiMethod === "NLP" ? "Qua Tên KH" : (aiMethod === "ONNX" ? "Qua Biểu đồ" : ""),
+                "PP Nhận diện": aiMethod === "DATABASE" ? "Từ Dữ liệu gốc" : (aiMethod === "NLP" ? "Qua Tên KH" : (aiMethod === "ONNX" ? "Qua Biểu đồ" : "")),
                 "Dự báo SL Năm (kWh)": Math.round(annualEst),
                 "Nhóm Sản lượng": volGroup,
                 "Dự báo ĐMTMN": hasSolar ? "Có khả năng (Đường cong cổ vịt)" : "Không rõ",
@@ -502,13 +562,17 @@
         const badge = document.getElementById('industryBadge');
         const icon = document.getElementById('aiIcon');
         
-        if(customer._aiMethod === "NLP") {
+        if(customer._aiMethod === "DATABASE") {
+            badge.className = "industry-badge badge-db";
+            icon.innerText = "🗄️"; // Tủ hồ sơ (Database gốc)
+            document.getElementById('customerIndustry').title = "Trích xuất chính xác 100% từ Danh mục dữ liệu gốc bạn tải lên";
+        } else if(customer._aiMethod === "NLP") {
             badge.className = "industry-badge badge-nlp";
-            icon.innerText = "🔍"; // Kính lúp (Quét Text)
+            icon.innerText = "🔍"; 
             document.getElementById('customerIndustry').title = "Được nhận diện tự động thông qua Tên Khách hàng";
         } else {
             badge.className = "industry-badge badge-ai";
-            icon.innerText = "🤖"; // Robot (AI)
+            icon.innerText = "🤖"; 
             document.getElementById('customerIndustry').title = "Được dự báo bằng Trí tuệ Nhân tạo thông qua Biểu đồ Phụ tải";
         }
 
