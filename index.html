@@ -48,6 +48,7 @@
         .badge-ai { background: #e2e3e5; border-color: #d6d8db; }
         .badge-nlp { background: #d1e7dd; border-color: #badbcc; color: #0f5132 !important; }
         .badge-db { background: #fff3cd; border-color: #ffeeba; color: #856404 !important; }
+        .badge-rules { background: #e0d9f7; border-color: #c4b5f4; color: #4a2d8f !important; }
         
         table { width: 100%; border-collapse: collapse; margin-top: 25px; background: white; font-size: 13px; }
         thead { position: sticky; top: 0; z-index: 10; }
@@ -220,15 +221,39 @@
         if (!customerName) return null;
         let cleanName = removeVietnameseTones(customerName);
 
+        // Danh sách từ khóa được mở rộng từ dữ liệu thực tế EVNSPC
+        // Thứ tự ưu tiên từ trên xuống: ngành đặc thù trước, chung sau
         const rules = [
-            { keywords: ["thuy san", "thuysan", "hai san", "ca tra", "tom", "seafood"], label: "Chế biến thực phẩm & thủy sản" },
-            { keywords: ["luong thuc", "thuc pham", "rau qua", "gao", "thit", "nong san"], label: "Chế biến thực phẩm & thủy sản" },
-            { keywords: ["nuoc da", "nmnđ", "nmnd", "nuoc giai khat", "bia"], label: "Sản xuất nước đá" },
-            { keywords: ["cao su", "nhua", "bao bi", "plastic", "rubber"], label: "Sản xuất các sản phẩm từ cao su và nhựa các loại" },
-            { keywords: ["soi", "det", "may ", "may mac", "garment", "vai"], label: "Sản xuất sợi, dệt vải và hoàn thiện sản phẩm dệt" },
-            { keywords: ["giay", "da ", "tui xach", "vali", "shoes"], label: "Thuộc, sơ chế da, sản xuất vali, túi xách, yên đệm và giày dép" },
-            { keywords: ["kim loai", "sat", "thep", "nhom", "dong", "ton"], label: "Sản xuất các sản phẩm từ kim loại" },
-            { keywords: ["khai thac", "da ", "cat", "soi", "ximang", "xi mang"], label: "Khai thác đá, cát, sỏi, đất sét, cao lanh, khoáng hóa chất" }
+            // --- Nhóm Thủy sản ---
+            { keywords: ["thuy san", "hai san", "ca tra", "ca basa", "ca moi", "tom", "tom cang", "tom su", "seafood", "ca sau", "nuoc man"], label: "Chế biến thủy sản" },
+            // --- Nhóm Nước đá ---
+            { keywords: ["nuoc da", "sx nuoc da", "san xuat nuoc da", "nuoc giai khat", "bia ", "nuoc uong", "dong lanh"], label: "Sản xuất nước đá" },
+            // --- Nhóm Xay xát - Lúa gạo ---
+            { keywords: ["xay xat", "lau bong", "bong gao", "kho lua", "say lua", "che bien gao", "xuat khau gao", "luong thuc"], label: "Xay xát - Lau bóng gạo" },
+            // --- Nhóm Khai thác - Vật liệu xây dựng ---
+            { keywords: ["khai thac da", "da granite", "da xay dung", "xi mang", "ximang", "vat lieu xay dung", "gach ngoi", "gach ceramic", "gach men", "cat xay"], label: "Khai thác đá / Vật liệu xây dựng" },
+            // --- Nhóm Chế biến gỗ ---
+            { keywords: ["che bien go", "go ", "go xuat khau", "do go", "san go", "vat lieu go", "may tre", "long nhon"], label: "Chế biến gỗ" },
+            // --- Nhóm Cao su / Nhựa ---
+            { keywords: ["cao su", "nhua", "bao bi", "plastic", "rubber", "san xuat nhua", "composite", "pvc", "nhua pp", "nhua pe"], label: "Sản xuất các sản phẩm từ cao su và nhựa các loại" },
+            // --- Nhóm May mặc / Dệt nhuộm ---
+            { keywords: ["det", "may mac", "may xuat khau", "garment", "vai", "soi", "nhuom", "len xuat khau", "trang phuc", "ao quan", "bao bi det"], label: "May mặc / Dệt nhuộm" },
+            // --- Nhóm Da giày / Túi xách ---
+            { keywords: ["giay dep", "da giay", "tui xach", "vali", "yem dep", "shoes", "leather", "da thuc vat", "balo", "tui tay"], label: "Da giày / Túi xách" },
+            // --- Nhóm Cơ khí / Kim loại ---
+            { keywords: ["co khi", "sat thep", "thep xay dung", "thep tam", "kim loai", "nhom", "dong thau", "ton ", "ren ", "duc ", "han "], label: "Cơ khí / Kim loại" },
+            // --- Nhóm Nông nghiệp / Chăn nuôi ---
+            { keywords: ["chan nuoi", "trai ga", "trai heo", "trai vit", "nuoi trong", "thuy canh", "trong trot", "nong trai", "bom tuoi", "tuoi tieu"], label: "Chăn nuôi / Nông nghiệp" },
+            // --- Nhóm Chế biến hạt / Nông sản ---
+            { keywords: ["hat dieu", "dieu rang", "hat co", "ca phe", "hat tieu", "tiem ga", "tiem rang", "che bien nong san", "rau qua", "thuc pham nong san"], label: "Chế biến thực phẩm & Nông sản" },
+            // --- Nhóm Thực phẩm chung ---
+            { keywords: ["thuc pham", "thit ", "sua ", "banh ", "kem ", "mi ", "pho ", "che bien tp", "do uong"], label: "Chế biến thực phẩm" },
+            // --- Nhóm Giấy / Bao bì ---
+            { keywords: ["giay ", "carton", "bao bi giay", "san xuat giay", "nha may giay", "packaging"], label: "Sản xuất giấy và sản phẩm từ giấy" },
+            // --- Nhóm Kho lạnh ---
+            { keywords: ["kho lanh", "kho dong lanh", "lanh", "bao quan lanh"], label: "Kho lạnh / Cấp đông" },
+            // --- Nhóm Hành chính / Văn phòng ---
+            { keywords: ["truong ", "benh vien", "uy ban", "so ", "cuc ", "phong ", "quan ly ha tang", "dich vu hanh chinh"], label: "Hành chính / Văn phòng" },
         ];
 
         for (let rule of rules) {
@@ -424,20 +449,75 @@
                 // LỚP 2: Dùng AI ONNX nhìn vào đường cong 24h
                 else if (max > 0) {
                     if (aiSession) {
+                        // --- ONNX AI (Lớp 2a): Dùng model đã huấn luyện ---
                         try {
+                            // Nhãn ngành theo index model (phải khớp thứ tự lúc train)
+                            const ONNX_LABELS = [
+                                "Sản xuất các sản phẩm từ cao su và nhựa các loại",
+                                "Chế biến thực phẩm",
+                                "Sản xuất nước đá",
+                                "May mặc / Dệt nhuộm",
+                                "Xay xát - Lau bóng gạo",
+                                "Cơ khí / Kim loại",
+                                "Chế biến thủy sản",
+                                "Da giày / Túi xách",
+                                "Chăn nuôi / Nông nghiệp",
+                                "Sản xuất giấy và sản phẩm từ giấy",
+                                "Khai thác đá / Vật liệu xây dựng",
+                                "Chế biến gỗ",
+                                "Kho lạnh / Cấp đông",
+                                "Sản xuất đồ uống",
+                                "Chế biến thực phẩm & Nông sản",
+                                "Sản xuất / Thương mại tổng hợp"
+                            ];
                             let normalized_vals = vals.map(v => v / max);
+                            // ✅ Lấy tên input động, không hardcode
+                            let inputName = aiSession.inputNames[0];
                             let tensor = new ort.Tensor('float32', new Float32Array(normalized_vals), [1, 24]);
-                            let feeds = { float_input: tensor };
+                            let results = await aiSession.run({ [inputName]: tensor });
                             let outputName = aiSession.outputNames[0];
-                            let results = await aiSession.run(feeds, [outputName]);
-                            
-                            predictedIndustry = results[outputName].data[0]; 
+                            let rawOut = results[outputName].data[0];
+                            // ✅ Xử lý cả output dạng số (index) và dạng chuỗi
+                            if (typeof rawOut === 'number' || typeof rawOut === 'bigint') {
+                                const idx = Number(rawOut);
+                                predictedIndustry = ONNX_LABELS[idx] ?? `Nhóm ${idx}`;
+                            } else {
+                                predictedIndustry = String(rawOut);
+                            }
                             aiMethod = "ONNX"; 
                         } catch (err) {
-                            predictedIndustry = "Khác";
+                            console.warn("ONNX lỗi, chuyển sang Rules:", err.message);
+                            // Fallthrough xuống Rules dự phòng bên dưới
+                            aiSession = null;
                         }
-                    } else {
-                        predictedIndustry = "Khác";
+                    }
+                    
+                    // --- Rules dự phòng (Lớp 2b): Từ thống kê 3.578 KH thực tế EVNSPC ---
+                    if (!aiSession && aiMethod !== "ONNX") {
+                        const nightAvgR = (vals[22]+vals[23]+vals[0]+vals[1]+vals[2]+vals[3]+vals[4]) / 7;
+                        const dayAvgR   = (vals[8]+vals[9]+vals[10]+vals[11]+vals[12]+vals[13]+vals[14]+vals[15]+vals[16]) / 9;
+                        const eveAvgR   = (vals[17]+vals[18]+vals[19]+vals[20]+vals[21]) / 5;
+                        const night_r = avg > 0 ? nightAvgR / avg : 0;
+                        const day_r   = avg > 0 ? dayAvgR   / avg : 0;
+                        const eve_r   = avg > 0 ? eveAvgR   / avg : 0;
+
+                        if      (cv > 0.90 && night_r > 0.85)                      predictedIndustry = "Xay xát - Lau bóng gạo";
+                        else if (cv > 0.90 && day_r > 1.40)                        predictedIndustry = "Khai thác đá / Vật liệu xây dựng";
+                        else if (night_r > 1.30 && eve_r < 0.70)                   predictedIndustry = "Sản xuất đồ uống";
+                        else if (night_r > 1.10 && day_r < 1.05 && eve_r < 0.80)  predictedIndustry = "Sản xuất nước đá";
+                        else if (night_r < 0.50 && day_r > 1.50)                   predictedIndustry = "Da giày / Túi xách";
+                        else if (night_r < 0.65 && day_r > 1.40 && eve_r < 0.80)  predictedIndustry = "Khai thác đá / Vật liệu xây dựng";
+                        else if (night_r < 0.65 && day_r > 1.30)                   predictedIndustry = "Cơ khí / Kim loại";
+                        else if (cv < 0.22 && day_r > 1.05)                        predictedIndustry = "Chăn nuôi / Nông nghiệp";
+                        else if (cv < 0.32 && night_r > 0.78 && day_r > 1.15)     predictedIndustry = "Sản xuất các sản phẩm từ cao su và nhựa các loại";
+                        else if (cv > 0.55 && night_r > 0.75 && day_r > 1.20)     predictedIndustry = "Cơ khí / Kim loại";
+                        else if (cv > 0.40 && day_r > 1.15 && eve_r > 0.95)       predictedIndustry = "Chế biến thủy sản";
+                        else if (cv > 0.35 && day_r > 1.20 && eve_r < 0.92)       predictedIndustry = "Chế biến thực phẩm";
+                        else if (cv < 0.40 && night_r > 0.82 && eve_r > 0.98)     predictedIndustry = "May mặc / Dệt nhuộm";
+                        else if (night_r > 1.00 && day_r > 1.00 && cv > 0.45)     predictedIndustry = "Chế biến lúa gạo";
+                        else if (cv < 0.35 && day_r > 1.10)                        predictedIndustry = "Sản xuất giấy và sản phẩm từ giấy";
+                        else                                                        predictedIndustry = "Sản xuất / Thương mại tổng hợp";
+                        aiMethod = "RULES";
                     }
                 }
             }
@@ -477,7 +557,7 @@
                 "Trung bình Giờ DR (kW)": peakAvg.toFixed(2),
                 "Hệ số biến thiên CV (%)": (cv * 100).toFixed(1) + "%",
                 "Dự báo Ngành Nghề": predictedIndustry,
-                "PP Nhận diện": aiMethod === "DATABASE" ? "Từ Dữ liệu gốc" : (aiMethod === "NLP" ? "Qua Tên KH" : (aiMethod === "ONNX" ? "Qua Biểu đồ" : "")),
+                "PP Nhận diện": aiMethod === "DATABASE" ? "🗄️ Từ Dữ liệu gốc" : (aiMethod === "NLP" ? "🔍 Qua Tên KH" : (aiMethod === "ONNX" ? "🤖 AI ONNX" : "📊 Rules thống kê")),
                 "Dự báo SL Năm (kWh)": Math.round(annualEst),
                 "Nhóm Sản lượng": volGroup,
                 "Dự báo ĐMTMN": hasSolar ? "Có khả năng (Đường cong cổ vịt)" : "Không rõ",
@@ -564,16 +644,20 @@
         
         if(customer._aiMethod === "DATABASE") {
             badge.className = "industry-badge badge-db";
-            icon.innerText = "🗄️"; // Tủ hồ sơ (Database gốc)
+            icon.innerText = "🗄️";
             document.getElementById('customerIndustry').title = "Trích xuất chính xác 100% từ Danh mục dữ liệu gốc bạn tải lên";
         } else if(customer._aiMethod === "NLP") {
             badge.className = "industry-badge badge-nlp";
             icon.innerText = "🔍"; 
             document.getElementById('customerIndustry').title = "Được nhận diện tự động thông qua Tên Khách hàng";
-        } else {
+        } else if(customer._aiMethod === "ONNX") {
             badge.className = "industry-badge badge-ai";
             icon.innerText = "🤖"; 
-            document.getElementById('customerIndustry').title = "Được dự báo bằng Trí tuệ Nhân tạo thông qua Biểu đồ Phụ tải";
+            document.getElementById('customerIndustry').title = "Được dự báo bằng Mô hình AI ONNX thông qua Biểu đồ Phụ tải";
+        } else {
+            badge.className = "industry-badge badge-rules";
+            icon.innerText = "📊";
+            document.getElementById('customerIndustry').title = "Được dự báo bằng Rules thống kê từ dữ liệu thực tế 3.578 KH EVNSPC";
         }
 
         document.getElementById('solarBadge').style.display = customer._hasSolar ? 'inline-block' : 'none';
