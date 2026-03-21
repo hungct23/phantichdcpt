@@ -614,41 +614,152 @@ function renderOvCharts(){
   });
 }
 
-// Đường cong tổng hợp SPC — KHÔNG phân nhóm, chỉ 1 đường tổng
+// ── Hàm tính peak/baseline và tạo plugin chỉ báo đỉnh-nền ──
+function calcPeakBaseline(dataArr, si, ei){
+  const peakSlice = dataArr.slice(si, ei+1);
+  const baseSlice = [...dataArr.slice(0, si), ...dataArr.slice(ei+1)];
+  const peakAvg  = peakSlice.reduce((a,b)=>a+b,0) / (peakSlice.length||1);
+  const baseAvg  = baseSlice.reduce((a,b)=>a+b,0) / (baseSlice.length||1);
+  return { peakAvg, baseAvg, diff: peakAvg - baseAvg };
+}
+
+function makePeakBasePlugin(si, ei, peakAvg, baseAvg, unitLabel, diffVal){
+  return {
+    id:'peakBaseIndicator',
+    afterDraw(chart){
+      const {ctx, chartArea:{left,right,top,bottom}, scales:{x,y}} = chart;
+      const x1=x.getPixelForValue(si), x2=x.getPixelForValue(ei);
+      const yPeak=y.getPixelForValue(peakAvg);
+      const yBase=y.getPixelForValue(baseAvg);
+
+      ctx.save();
+
+      // ── Vùng khung giờ khảo sát (nền đỏ nhạt) ──
+      ctx.fillStyle='rgba(239,68,68,0.08)';
+      ctx.fillRect(x1, top, x2-x1, bottom-top);
+
+      // ── Vùng chênh lệch đỉnh-nền (fill cam) ──
+      if(diffVal > 0){
+        ctx.fillStyle='rgba(245,158,11,0.18)';
+        ctx.fillRect(x1, yPeak, x2-x1, yBase-yPeak);
+      }
+
+      // ── Đường nền (baseline) — nét đứt xám ──
+      ctx.beginPath();
+      ctx.setLineDash([6,4]);
+      ctx.strokeStyle='rgba(100,100,100,0.55)';
+      ctx.lineWidth=1.5;
+      ctx.moveTo(left+4, yBase);
+      ctx.lineTo(right-4, yBase);
+      ctx.stroke();
+
+      // ── Đường đỉnh (peak avg) — nét đứt đỏ ──
+      ctx.beginPath();
+      ctx.setLineDash([6,4]);
+      ctx.strokeStyle='rgba(220,53,69,0.70)';
+      ctx.lineWidth=1.5;
+      ctx.moveTo(x1, yPeak);
+      ctx.lineTo(x2, yPeak);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // ── Mũi tên chỉ báo biên độ (bên phải khung giờ) ──
+      if(diffVal > 0 && yBase > yPeak + 12){
+        const xArrow = Math.min(x2+10, right-60);
+        const yMid   = (yPeak+yBase)/2;
+
+        // Đường dọc
+        ctx.beginPath();
+        ctx.strokeStyle='#d97706';
+        ctx.lineWidth=1.5;
+        ctx.moveTo(xArrow, yPeak+3);
+        ctx.lineTo(xArrow, yBase-3);
+        ctx.stroke();
+
+        // Đầu mũi tên trên (▲)
+        ctx.beginPath();
+        ctx.fillStyle='#d97706';
+        ctx.moveTo(xArrow,     yPeak);
+        ctx.lineTo(xArrow-4,   yPeak+8);
+        ctx.lineTo(xArrow+4,   yPeak+8);
+        ctx.closePath(); ctx.fill();
+
+        // Đầu mũi tên dưới (▼)
+        ctx.beginPath();
+        ctx.moveTo(xArrow,     yBase);
+        ctx.lineTo(xArrow-4,   yBase-8);
+        ctx.lineTo(xArrow+4,   yBase-8);
+        ctx.closePath(); ctx.fill();
+
+        // Text biên độ
+        // diffVal đơn vị kW — hiển thị MW khi >= 1.000 kW, giữ kW khi nhỏ hơn
+        const fmt = diffVal >= 1000
+          ? (diffVal / 1000).toFixed(1) + ' MW'
+          : Math.round(diffVal).toLocaleString('vi-VN') + ' kW';
+        ctx.font='bold 11px Segoe UI,sans-serif';
+        ctx.fillStyle='#92400e';
+        ctx.textAlign='left';
+        ctx.fillText(fmt, xArrow+8, yMid+4);
+      }
+
+      // ── Label "Nền" và "Đỉnh" bên trái ──
+      ctx.font='11px Segoe UI,sans-serif';
+      ctx.textAlign='left';
+      ctx.fillStyle='rgba(80,80,80,0.75)';
+      ctx.fillText('Nền', left+4, yBase-4);
+      ctx.fillStyle='rgba(180,30,30,0.80)';
+      ctx.fillText('Đỉnh', left+4, yPeak-4);
+
+      ctx.restore();
+    }
+  };
+}
+
+// Đường cong tổng hợp SPC — 1 đường tổng + chỉ báo đỉnh-nền
 function renderSpcChart(){
+  const si=+document.getElementById('timeStart').value;
+  const ei=+document.getElementById('timeEnd').value;
   const total=Array(24).fill(0);
   finalData.forEach(d=>{for(let i=0;i<24;i++)total[i]+=d._vals[i];});
+  const {peakAvg,baseAvg,diff}=calcPeakBaseline(total,si,ei);
   if(mySpc)mySpc.destroy();
   mySpc=new Chart(document.getElementById('spcChart'),{
     type:'line',
     data:{labels:TL,datasets:[{
-      label:'Tổng công suất EVNSPC (kW)',data:total,
+      label:'Tổng CS EVNSPC (kW)',data:total,
       borderColor:'#004a99',backgroundColor:'#004a9922',
       borderWidth:2.5,fill:true,tension:0.3,pointRadius:0
     }]},
-    options:{responsive:true,plugins:{legend:{display:false},
-      title:{display:true,text:'Đường cong phụ tải tổng — EVNSPC'}},
-      scales:{y:{beginAtZero:true}}}
+    options:{responsive:true,
+      plugins:{legend:{display:false},
+        title:{display:true,text:'Đường cong phụ tải tổng — EVNSPC'}},
+      scales:{y:{beginAtZero:true}}},
+    plugins:[makePeakBasePlugin(si,ei,peakAvg,baseAvg,'kW',diff)]
   });
 }
 
-// Đường cong theo CTĐL — 1 đường tổng theo công ty
+// Đường cong theo CTĐL — 1 đường tổng + chỉ báo đỉnh-nền
 function drawGroupChart(){
+  const si=+document.getElementById('timeStart').value;
+  const ei=+document.getElementById('timeEnd').value;
   const comp=document.getElementById('companySelect').value;
   const fd=comp==='ALL'?finalData:finalData.filter(d=>d['Công ty ĐL']===comp);
   const total=Array(24).fill(0);
   fd.forEach(d=>{for(let i=0;i<24;i++)total[i]+=d._vals[i];});
+  const {peakAvg,baseAvg,diff}=calcPeakBaseline(total,si,ei);
   if(myGrp)myGrp.destroy();
   myGrp=new Chart(document.getElementById('groupChart'),{
     type:'line',
     data:{labels:TL,datasets:[{
-      label:'Tổng công suất (kW)',data:total,
+      label:'Tổng CS (kW)',data:total,
       borderColor:'#0e7490',backgroundColor:'#0e749022',
       borderWidth:2.5,fill:true,tension:0.3,pointRadius:0
     }]},
-    options:{responsive:true,plugins:{legend:{display:false},
-      title:{display:true,text:comp==='ALL'?'Toàn bộ':comp}},
-      scales:{y:{beginAtZero:true}}}
+    options:{responsive:true,
+      plugins:{legend:{display:false},
+        title:{display:true,text:comp==='ALL'?'Toàn bộ EVNSPC':comp}},
+      scales:{y:{beginAtZero:true}}},
+    plugins:[makePeakBasePlugin(si,ei,peakAvg,baseAvg,'kW',diff)]
   });
 }
 
@@ -760,13 +871,10 @@ function drawCustomerChart(){
   const col=d['Kết quả Phân loại'].startsWith('2.1')?'#d97706':
             d['Kết quả Phân loại'].startsWith('2.2')?'#c0392b':'#1a7a4a';
 
+  // Tính đỉnh/nền cho KH này
+  const {peakAvg,baseAvg,diff}=calcPeakBaseline(d._vals,si,ei);
+
   if(myCust)myCust.destroy();
-  const peakPl={id:'pz',beforeDraw(c){
-    const{ctx,chartArea:{top,bottom},scales:{x}}=c;
-    const x1=x.getPixelForValue(si),x2=x.getPixelForValue(ei);
-    ctx.save();ctx.fillStyle='rgba(239,68,68,0.10)';
-    ctx.fillRect(x1,top,x2-x1,bottom-top);ctx.restore();
-  }};
   myCust=new Chart(document.getElementById('custChart'),{
     type:'line',
     data:{labels:TL,datasets:[{label:'CS (kW)',data:d._vals,
@@ -774,7 +882,7 @@ function drawCustomerChart(){
     options:{responsive:true,
       plugins:{title:{display:true,text:d['Tên KH']},legend:{display:false}},
       scales:{y:{beginAtZero:true}}},
-    plugins:[peakPl]
+    plugins:[makePeakBasePlugin(si,ei,peakAvg,baseAvg,'kW',diff)]
   });
 }
 
